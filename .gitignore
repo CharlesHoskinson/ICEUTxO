@@ -1,0 +1,29 @@
+# Lean / Lake build artifacts
+/lean/.lake/
+/lean/.cache/
+lake-manifest.json
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.out
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AI tool work directories
+.nontrivial-work/
+.fhr-work/
+.reviews/
+*.nontrivial.md
