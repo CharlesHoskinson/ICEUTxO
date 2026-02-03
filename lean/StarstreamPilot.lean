@@ -235,6 +235,13 @@ def isValidProof (p : ProofCommitment) : Prop :=
 def isPendingProof (p : ProofCommitment) : Prop :=
   p.phase ∈ [ProofPhase.notStarted, ProofPhase.generating, ProofPhase.verifying]
 
+/-- No duplicate pending proofs for the same process ID. -/
+def noDuplicatePendingProofs (tx : Tx) : Prop :=
+  ∀ p1 p2 : ProofCommitment,
+    p1 ∈ tx.proofCommitments → p2 ∈ tx.proofCommitments →
+    isPendingProof p1 → isPendingProof p2 →
+    p1.processId = p2.processId → p1 = p2
+
 def inputsDisjointOutputs (tx : Tx) : Prop :=
   Disjoint tx.inputs tx.outputs
 
@@ -332,9 +339,7 @@ lemma handleEffect_preserves_history {l l' : Ledger} {i : InterfaceId}
     (h : handleEffect l i = some l') : l'.history = l.history := by
   unfold handleEffect at h
   cases hpop : pop? (l.effects i) with
-  | none =>
-      simp [hpop] at h
-      cases h
+  | none => simp [hpop] at h
   | some p =>
       rcases p with ⟨_eff, rest⟩
       by_cases hcond : (l.handlerStacks i).length > 0
@@ -342,7 +347,6 @@ lemma handleEffect_preserves_history {l l' : Ledger} {i : InterfaceId}
         cases h
         rfl
       · simp [hpop, hcond] at h
-        cases h
 
 /-! # Precedence Graph and Conflict Serializability -/
 
@@ -924,13 +928,6 @@ def refinementWitness (m : Mode) (l : Ledger) (tx : Tx) : Prop :=
 def noDoubleSpend (l : Ledger) : Prop :=
   Disjoint l.utxos l.consumed
 
-/-- No duplicate pending proofs for the same process ID. -/
-def noDuplicatePendingProofs (tx : Tx) : Prop :=
-  ∀ p1 p2 : ProofCommitment,
-    p1 ∈ tx.proofCommitments → p2 ∈ tx.proofCommitments →
-    isPendingProof p1 → isPendingProof p2 →
-    p1.processId = p2.processId → p1 = p2
-
 /-- Every pending transaction satisfies noDuplicatePendingProofs. -/
 def pendingProofsUnique (l : Ledger) : Prop :=
   ∀ tx ∈ l.pending, noDuplicatePendingProofs tx
@@ -975,8 +972,9 @@ theorem historyNodup_step {m : Mode} {l l' : Ledger}
       simpa [historyNodup, applyAbort] using hnd
   | installH _ _ _ =>
       simpa [historyNodup, installHandler] using hnd
-  | uninstallH _ _ _ =>
-      simpa [historyNodup, uninstallHandler] using hnd
+  | uninstallH _ l i =>
+      unfold uninstallHandler historyNodup
+      cases pop? (l.handlerStacks i) <;> exact hnd
   | raiseE _ _ _ =>
       simpa [historyNodup, raiseEffect] using hnd
   | handleE _ l l' _ h =>
@@ -988,10 +986,9 @@ theorem historyNodup_steps {m : Mode} {l l' : Ledger}
     (hsteps : Steps m l l')
     (hnd : historyNodup l) :
     historyNodup l' := by
-  induction hsteps with
-  | refl _ _ => exact hnd
-  | step _ l₁ l₂ l₃ h₁ h₂ ih =>
-      exact ih (historyNodup_step h₁ hnd)
+  induction hsteps
+  case refl => exact hnd
+  case step l₂ hstep _hrest ih => exact ih (historyNodup_step hstep hnd)
 
 /-- Initial states: empty history and no pending/locked/consumed/effects/handlers. -/
 def Init (l : Ledger) : Prop :=
@@ -1068,11 +1065,11 @@ theorem pendingProofsUnique_step {m : Mode} {l l' : Ledger}
       simpa [pendingProofsUnique, lockInputs] using huniq
   | commit _ l tx _hpend _hen _hacyc _hacycFull =>
       intro tx' hmem
-      have hmem' : tx' ∈ l.pending := (Finset.mem_erase.mp hmem).1
+      have hmem' : tx' ∈ l.pending := (Finset.mem_erase.mp hmem).2
       exact huniq tx' hmem'
   | abort _ l tx _hpend =>
       intro tx' hmem
-      have hmem' : tx' ∈ l.pending := (Finset.mem_erase.mp hmem).1
+      have hmem' : tx' ∈ l.pending := (Finset.mem_erase.mp hmem).2
       exact huniq tx' hmem'
   | installH _ _ _ =>
       simpa [pendingProofsUnique, installHandler] using huniq
@@ -1091,10 +1088,9 @@ theorem pendingProofsUnique_steps {m : Mode} {l l' : Ledger}
     (hsteps : Steps m l l')
     (huniq : pendingProofsUnique l) :
     pendingProofsUnique l' := by
-  induction hsteps with
-  | refl _ _ => exact huniq
-  | step _ l₁ l₂ l₃ h₁ h₂ ih =>
-      exact ih (pendingProofsUnique_step h₁ huniq)
+  induction hsteps
+  case refl => exact huniq
+  case step l₂ hstep _hrest ih => exact ih (pendingProofsUnique_step hstep huniq)
 
 /-- The abstraction map: project concrete ledger to abstract serial state. -/
 def absLedger (l : Ledger) : Ledger :=
@@ -1191,7 +1187,7 @@ theorem noncommit_preserves_no_double_spend {m : Mode} {l l' : Ledger}
   cases hstep with
   | addPending _ _ _ _ _ => exact hinv
   | lockInputs _ _ _ _ _ => exact hinv
-  | commit _ _ _ _ _ _ _ _ =>
+  | commit _ _ _ _ _ _ _ =>
       exfalso; simp [applyCommit] at hnocommit
   | abort _ _ _ _ => exact hinv
   | installH _ _ _ => exact hinv
@@ -1214,7 +1210,7 @@ theorem consumed_monotone_step {m : Mode} {l l' : Ledger}
   cases hstep with
   | addPending _ _ _ _ _ => exact Finset.Subset.refl _
   | lockInputs _ _ _ _ _ => exact Finset.Subset.refl _
-  | commit _ _ _ _ _ _ _ _ => exact Finset.subset_union_left
+  | commit _ _ _ _ _ _ _ => exact Finset.subset_union_left
   | abort _ _ _ _ => exact Finset.Subset.refl _
   | installH _ _ _ => exact Finset.Subset.refl _
   | uninstallH _ _ i =>
@@ -1295,13 +1291,13 @@ theorem commit_adds_to_history (l : Ledger) (tx : Tx) :
 theorem commit_removes_from_pending (l : Ledger) (tx : Tx)
     (hpend : tx ∈ l.pending) :
     tx ∉ (applyCommit l tx).pending := by
-  simp [applyCommit, Finset.not_mem_erase]
+  simp [applyCommit, Finset.mem_erase]
 
 /-- After abort, tx is not pending (assuming tx was pending). -/
 theorem abort_removes_from_pending (l : Ledger) (tx : Tx)
     (hpend : tx ∈ l.pending) :
     tx ∉ (applyAbort l tx).pending := by
-  simp [applyAbort, Finset.not_mem_erase]
+  simp [applyAbort, Finset.mem_erase]
 
 /-- Abort is always enabled for any pending tx. -/
 theorem abort_enabled_of_pending (l : Ledger) (tx : Tx)
@@ -1334,22 +1330,14 @@ theorem handleEffect_decreases_effects (l l' : Ledger) (i : InterfaceId)
         unfold pop? at hpop
         cases hq : l.effects i with
         | nil => simp [hq] at hpop
-        | cons x xs => simp [hq] at hpop; exact hpop ▸ rfl
+        | cons x xs =>
+          simp [hq] at hpop
+          simp only [hpop.1, hpop.2, hq]
       rw [hlen]
       simp
     · simp [hpop, hcond] at h
 
 /-! # Serializability Theorems -/
-
-/-- Acyclic full-conflict precedence graph implies core-serializable.
-    This uses the topological-sort witness from `acyclic_strong_serializable`,
-    which is then projected to `coreSerializable`. -/
-theorem acyclic_precgraph_serializable {l0 l} :
-    l.history.Nodup →
-    coreSerializable l0 l := by
-  intro hnodup
-  have hacyc : fullPrecGraphAcyclic l.history := fullPrecGraphAcyclic_of_history l.history
-  exact acyclic_full_serializable (l0 := l0) (l := l) hnodup hacyc
 
 theorem coreSerializable_of_strong {l0 l} :
     strongCoreSerializable (coreOf l0) l.history →
@@ -1365,6 +1353,16 @@ theorem acyclic_full_serializable {l0 l} :
   intro hnodup hacyc
   have hstrong := acyclic_strong_serializable (coreOf l0) l.history hnodup hacyc
   exact coreSerializable_of_strong hstrong
+
+/-- Acyclic full-conflict precedence graph implies core-serializable.
+    This uses the topological-sort witness from `acyclic_strong_serializable`,
+    which is then projected to `coreSerializable`. -/
+theorem acyclic_precgraph_serializable {l0 l} :
+    l.history.Nodup →
+    coreSerializable l0 l := by
+  intro hnodup
+  have hacyc : fullPrecGraphAcyclic l.history := fullPrecGraphAcyclic_of_history l.history
+  exact acyclic_full_serializable (l0 := l0) (l := l) hnodup hacyc
 
 /-- Extended acyclicity implies original acyclicity (fewer edges ⊆ more edges). -/
 theorem acyclicExt_implies_acyclic {hist : List Tx} :
@@ -1390,6 +1388,16 @@ theorem opt_mode_serializable {l0 l} :
     l.history.Nodup →
     coreSerializable l0 l :=
   acyclic_precgraph_serializable
+
+/-- Strong serializability from ledger invariant: ALL conflict-respecting
+    permutations of the committed history produce the same CoreState.
+    This is the universal diamond property, strictly stronger than the
+    existential `coreSerializable`. -/
+theorem acyclic_precgraph_strong_serializable {l0 l} :
+    ledgerInvariant l →
+    strongCoreSerializable (coreOf l0) l.history := by
+  intro ⟨_, _, hnodup, _, _, hacycFull⟩
+  exact acyclic_strong_serializable (coreOf l0) l.history hnodup hacycFull
 
 /-- Locking mode serializability derived from the ledger invariant.
     Since `ledgerInvariant` includes full acyclicity and history nodup,
@@ -1420,16 +1428,6 @@ theorem opt_mode_serializable_strong_inv {l0 l} :
     strongCoreSerializable (coreOf l0) l.history := by
   intro hinv
   exact acyclic_precgraph_strong_serializable hinv
-
-/-- Strong serializability from ledger invariant: ALL conflict-respecting
-    permutations of the committed history produce the same CoreState.
-    This is the universal diamond property, strictly stronger than the
-    existential `coreSerializable`. -/
-theorem acyclic_precgraph_strong_serializable {l0 l} :
-    ledgerInvariant l →
-    strongCoreSerializable (coreOf l0) l.history := by
-  intro ⟨_, _, hnodup, _, _, hacycFull⟩
-  exact acyclic_strong_serializable (coreOf l0) l.history hnodup hacycFull
 
 /-! # Refinement: Concurrent Spec Refines Serial Spec
 
@@ -1529,10 +1527,9 @@ theorem init_ledgerInvariant {l : Ledger} :
 theorem ledgerInvariant_steps {m : Mode} {l l' : Ledger}
     (hsteps : Steps m l l') (hinv : ledgerInvariant l) :
     ledgerInvariant l' := by
-  induction hsteps with
-  | refl _ _ => exact hinv
-  | step _ l₁ l₂ l₃ h₁ h₂ ih =>
-      exact ih (step_preserves_invariant h₁ hinv)
+  induction hsteps
+  case refl => exact hinv
+  case step l₂ hstep _hrest ih => exact ih (step_preserves_invariant hstep hinv)
 
 theorem reachable_ledgerInvariant {m : Mode} {l₀ l : Ledger}
     (hinit : Init l₀) (hsteps : Steps m l₀ l) :
@@ -1627,7 +1624,7 @@ theorem concurrent_refines_serial {m : Mode} {l₀ lₙ : Ledger}
         rw [absLedger_stuttering_addPending]; exact ih₂
     | lockInputs _ _ _ _ _ =>
         rw [absLedger_stuttering_lockInputs]; exact ih₂
-    | commit _ _ tx _ _ hen _ _ =>
+    | commit _ _ tx _ hen _ _ =>
         obtain ⟨hproofs, hvalid, hphase, _hfresh, _⟩ := hen
         exact SerialSteps.step m _ _ _ ⟨tx, hproofs, validTx_absLedger hvalid, hphase,
           absLedger_applyCommit _ tx⟩ ih₂
