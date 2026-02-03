@@ -5,12 +5,8 @@ namespace Starstream
 
 /-! # SBAC Bridge Layer (Coordination Scripts + Ledger)
 
-This file introduces *minimal* SBAC-facing predicates that connect
-coordination-script witnesses to the existing ledger commit guards.
-It does NOT model full network/protocol messaging; it only defines
-the logical checks that a shard would perform in its prepare step.
-
-We keep this lightweight to avoid breaking prior formalizations.
+Not yet in Starstream. Minimal SBAC predicates for shard prepare checks.
+Does not model full network/protocol messaging.
 -/
 
 abbrev ShardId := Nat

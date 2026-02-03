@@ -64,6 +64,16 @@ paper/ Academic paper
 specs/ Design notes
 ```
 
+## Implementation
+
+This is the spec. The implementation is [Starstream](https://github.com/LFDT-Nightstream/Starstream).
+
+Done in Starstream: parser, typechecker, effect kinds, WASM codegen, UTXO storage.
+
+Not yet: coroutines, effect handlers, tx lifecycle, proofs, coordination scripts.
+
+See [IMPLEMENTATION-STATUS.md](./IMPLEMENTATION-STATUS.md) for details.
+
 ## What's verified
 
 ### TLA+ invariants (checked by TLC)

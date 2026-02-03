@@ -1,6 +1,8 @@
 --------------------------- MODULE StarstreamSpec ---------------------------
 (***************************************************************************
- * Top-Level Specification for Starstream UTXO/Transaction Protocol
+ * Starstream UTXO/Transaction Protocol
+ *
+ * See IMPLEMENTATION-STATUS.md for Starstream compiler alignment.
  ***************************************************************************)
 
 EXTENDS StarstreamTypes, StarstreamFrame, StarstreamUTXO, StarstreamEffects, StarstreamPTB,

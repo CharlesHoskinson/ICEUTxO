@@ -1,8 +1,70 @@
 import Mathlib
 
+/-!
+# ICE-UTxO Formalization
+
+See IMPLEMENTATION-STATUS.md for Starstream compiler alignment.
+
+Starstream compiles to WASM. UTXO storage blocks become WASM globals.
+-/
+
 namespace Starstream
 
 open Finset
+
+/-! # Starstream Type System
+
+Matches starstream-types/src/types.rs -/
+
+/-- Effect kinds: Pure | Effectful | Runtime -/
+inductive EffectKind where
+  | pure
+  | effectful
+  | runtime
+  deriving DecidableEq, Repr
+
+def EffectKind.le : EffectKind → EffectKind → Bool
+  | .pure, _ => true
+  | .effectful, .effectful | .effectful, .runtime => true
+  | .runtime, .runtime => true
+  | _, _ => false
+
+def EffectKind.join : EffectKind → EffectKind → EffectKind
+  | .runtime, _ | _, .runtime => .runtime
+  | .effectful, _ | _, .effectful => .effectful
+  | .pure, .pure => .pure
+
+abbrev TypeVarId := Nat
+
+inductive EnumVariantKind where
+  | unit
+  | tuple (payload : List Nat)
+  | struct (fields : List (String × Nat))
+  deriving Repr
+
+structure EnumVariant where
+  name : String
+  kind : EnumVariantKind
+  deriving Repr
+
+/-- Starstream types: var, int, bool, unit, function, tuple, record, enum -/
+inductive StarstreamType where
+  | var (id : TypeVarId)
+  | int
+  | bool
+  | unit
+  | function (paramCount : Nat) (resultIdx : Nat) (effect : EffectKind)
+  | tuple (elementCount : Nat)
+  | record (name : String) (fieldCount : Nat)
+  | enum (name : String) (variants : List EnumVariant)
+  deriving Repr
+
+structure TypeScheme where
+  varCount : Nat
+  tyIdx : Nat
+  deriving Repr
+
+/-! # Core Ledger Types -/
 
 abbrev UTXOId := Nat
 abbrev TxId := Nat
@@ -35,7 +97,7 @@ inductive ProofPhase where
   | failed
   deriving DecidableEq, Repr
 
-/-- Structured proof commitment, replacing `proofVerified : Bool`. -/
+/-- Structured proof commitment. IVC/PCD not yet in Starstream. -/
 structure ProofCommitment where
   proofKind     : Nat        -- 0 = IVC_Step, 1 = IVC_Accumulator, 2 = Witness
   processId     : ProcessId

@@ -4,10 +4,8 @@ namespace Starstream
 
 /-! # PTB compilation skeleton (event-structure extraction)
 
-This module defines a minimal PTB-style program representation and a
-deterministic translation to the event-structure Script used by the
-coordination semantics. It contains no proofs; it is intended as a
-foundation for the PTB -> event-structure correctness theorems.
+Not yet in Starstream (compiles to WASM instead). Defines PTB-style
+program representation and translation to event-structure Scripts.
 -/
 
 namespace PTB

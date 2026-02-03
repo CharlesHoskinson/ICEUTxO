@@ -6,10 +6,7 @@ open Finset
 
 /-! # Coordination Script Core (MPST-style)
 
-This module defines the *core* event-structure formalization used by
-ICE-UTxO coordination scripts. It reuses the existing Starstream
-identifiers and effect/handler types to stay consistent with prior
-formalizations.
+Not yet in Starstream. Specifies target semantics for coordination scripts.
 
 Key alignment points:
 - `UTXOId`, `InterfaceId`, `Handler`, `Effect` come from `StarstreamPilot.lean`
