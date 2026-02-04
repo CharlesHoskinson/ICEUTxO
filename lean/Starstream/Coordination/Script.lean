@@ -710,10 +710,34 @@ lemma Script.traceConsistent_of_local_and_cross (s : Script) (tr : List EventId)
         rwa [Finset.not_nonempty_iff_eq_empty, ← Finset.disjoint_iff_inter_eq_empty] at hshare
       exact hcross.2 e' e hdisj hord he
 
+/-- The head of a Nodup list cannot have any element "before" it.
+
+If `Before (e :: es) a e` held, then `e` would appear in the suffix `l2` after `a`,
+but `e` is also the head. This would mean `e` appears twice, contradicting `Nodup`. -/
 lemma before_head_false {e : EventId} {es : List EventId} {a : EventId}
     (hnd : (e :: es).Nodup) : ¬ Before (e :: es) a e := by
-  -- TODO: Complete proof - e cannot occur before itself in a list starting with e
-  sorry
+  intro ⟨l1, l2, heq, he_in_l2⟩
+  -- e ∉ es by Nodup
+  have hne : e ∉ es := (List.nodup_cons.mp hnd).1
+  -- Case split on l1
+  cases l1 with
+  | nil =>
+      -- l1 = []: e :: es = a :: l2, so es = l2 and e ∈ l2 = es
+      simp only [List.nil_append] at heq
+      -- heq : e :: es = a :: l2, so by injection es = l2
+      have hes : es = l2 := List.cons.inj heq |>.2
+      rw [hes] at hne
+      exact hne he_in_l2
+  | cons x l1' =>
+      -- l1 = x :: l1': e :: es = x :: (l1' ++ a :: l2)
+      simp only [List.cons_append] at heq
+      -- heq : e :: es = x :: (l1' ++ a :: l2), so es = l1' ++ a :: l2
+      have hes : es = l1' ++ a :: l2 := List.cons.inj heq |>.2
+      -- e ∈ l2 implies e ∈ es (since l2 is a suffix of es)
+      have he_in_es : e ∈ es := by
+        rw [hes]
+        exact List.mem_append_right l1' (List.mem_cons_of_mem a he_in_l2)
+      exact hne he_in_es
 
 lemma traceConsistentAux_validTraceAux (s : Script) :
     ∀ (C : Finset EventId) (tr : List EventId),
