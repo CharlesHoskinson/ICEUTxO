@@ -418,30 +418,53 @@ lemma LocalScript.validTraceAux_order (s : LocalScript) :
             · exact Or.inl hC
           · exact Or.inr (before_cons_of_tail hbefore)
 
+/-- Filtering a list preserves the `Before` relation (lifting direction).
+
+If `a` appears before `b` in the filtered list `tr.filter p`, then `a` also appears
+before `b` in the original list `tr`. This is the "information lifting" direction:
+properties of the filtered list imply properties of the original.
+
+The converse is `before_filter_of_before`.
+
+**Proof strategy:** Induction on the list with nested case analysis:
+- Base case: trivial since both filtered and unfiltered empty lists are identical
+- Inductive case: case split on whether the head passes the filter predicate,
+  then on whether `a` equals the head -/
 lemma before_of_filter {p : EventId → Bool} {tr : List EventId} {a b : EventId}
     (hnd : tr.Nodup) (ha : p a = true) (hb : p b = true) :
     Before (tr.filter p) a b → Before tr a b := by
   intro h
   induction tr with
   | nil =>
+      -- Both [].filter p and [] are empty, so the hypothesis equals the goal
       exact h
   | cons x xs ih =>
       by_cases hpx : p x = true
-      · -- p x = true: filter keeps x
+      · -- Case: p x = true, so filter keeps x
+        -- (x :: xs).filter p = x :: xs.filter p
         simp only [List.filter, hpx] at h
         by_cases hax : a = x
-        · -- a = x: a is the head
+        · -- Subcase: a = x (a is the head of the filtered list)
           subst hax
+          -- h : Before (x :: xs.filter p) x b, so b is in the filtered tail
           have hbmem : b ∈ xs.filter p := mem_tail_of_before_head h
+          -- Membership in filtered list implies membership in original
           have hbxs : b ∈ xs := List.mem_of_mem_filter hbmem
+          -- Construct Before (x :: xs) x b directly
           exact before_head hbxs
-        · -- a ≠ x: a is in tail
+        · -- Subcase: a ≠ x (a appears later in the list)
+          -- Strip the head to get Before in the filtered tail
           have h' : Before (xs.filter p) a b := before_cons_tail h hax
+          -- Extract Nodup for the tail from the cons
           have hnd' : xs.Nodup := (List.nodup_cons.mp hnd).2
+          -- Apply IH and lift back through cons
           exact before_cons_of_tail (ih hnd' h')
-      · -- p x = false: filter skips x
+      · -- Case: p x = false, so filter skips x
+        -- (x :: xs).filter p = xs.filter p
         simp only [List.filter, hpx] at h
+        -- Extract Nodup for the tail
         have hnd' : xs.Nodup := (List.nodup_cons.mp hnd).2
+        -- Apply IH directly (h is already about xs.filter p) and lift
         exact before_cons_of_tail (ih hnd' h)
 
 lemma before_filter_of_before {p : EventId → Bool} {tr : List EventId} {a b : EventId}
