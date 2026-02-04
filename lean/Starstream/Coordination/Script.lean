@@ -421,8 +421,28 @@ lemma LocalScript.validTraceAux_order (s : LocalScript) :
 lemma before_of_filter {p : EventId → Bool} {tr : List EventId} {a b : EventId}
     (hnd : tr.Nodup) (ha : p a = true) (hb : p b = true) :
     Before (tr.filter p) a b → Before tr a b := by
-  -- TODO: Complete proof - filtering preserves Before ordering
-  sorry
+  intro h
+  induction tr with
+  | nil =>
+      exact h
+  | cons x xs ih =>
+      by_cases hpx : p x = true
+      · -- p x = true: filter keeps x
+        simp only [List.filter, hpx] at h
+        by_cases hax : a = x
+        · -- a = x: a is the head
+          subst hax
+          have hbmem : b ∈ xs.filter p := mem_tail_of_before_head h
+          have hbxs : b ∈ xs := List.mem_of_mem_filter hbmem
+          exact before_head hbxs
+        · -- a ≠ x: a is in tail
+          have h' : Before (xs.filter p) a b := before_cons_tail h hax
+          have hnd' : xs.Nodup := (List.nodup_cons.mp hnd).2
+          exact before_cons_of_tail (ih hnd' h')
+      · -- p x = false: filter skips x
+        simp only [List.filter, hpx] at h
+        have hnd' : xs.Nodup := (List.nodup_cons.mp hnd).2
+        exact before_cons_of_tail (ih hnd' h)
 
 lemma before_filter_of_before {p : EventId → Bool} {tr : List EventId} {a b : EventId}
     (ha : p a = true) (hb : p b = true) :
