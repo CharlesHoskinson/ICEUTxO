@@ -335,8 +335,56 @@ lemma shareRole_exists {s : Script} {e f : EventId}
 lemma relevant_of_participant {s : Script} {r : RoleId} {e : EventId}
     (hr : r ∈ Action.participants (s.label e)) :
     s.relevant r e = true := by
-  -- TODO: Complete proof
-  sorry
+  unfold Script.relevant
+  cases h : s.label e with
+  | raise src dst iface tag =>
+      rw [h, Action.participants] at hr
+      simp only [mem_insert, mem_singleton] at hr
+      simp only [Action.toLocal, h]
+      rcases hr with h1 | h2
+      · subst h1; by_cases hc : r = src <;> simp [hc]
+      · subst h2; simp
+  | resume src dst iface tag =>
+      rw [h, Action.participants] at hr
+      simp only [mem_insert, mem_singleton] at hr
+      simp only [Action.toLocal, h]
+      rcases hr with h1 | h2
+      · subst h1; by_cases hc : r = src <;> simp [hc]
+      · subst h2; simp
+  | install src dst hand =>
+      rw [h, Action.participants] at hr
+      simp only [mem_insert, mem_singleton] at hr
+      simp only [Action.toLocal, h]
+      rcases hr with h1 | h2
+      · subst h1; by_cases hc : r = src <;> simp [hc]
+      · subst h2; simp
+  | uninstall src dst iface =>
+      rw [h, Action.participants] at hr
+      simp only [mem_insert, mem_singleton] at hr
+      simp only [Action.toLocal, h]
+      rcases hr with h1 | h2
+      · subst h1; by_cases hc : r = src <;> simp [hc]
+      · subst h2; simp
+  | read r' u =>
+      rw [h, Action.participants] at hr
+      simp only [mem_singleton] at hr
+      simp [Action.toLocal, h, hr]
+  | consume r' u =>
+      rw [h, Action.participants] at hr
+      simp only [mem_singleton] at hr
+      simp [Action.toLocal, h, hr]
+  | produce r' u =>
+      rw [h, Action.participants] at hr
+      simp only [mem_singleton] at hr
+      simp [Action.toLocal, h, hr]
+  | lock r' u =>
+      rw [h, Action.participants] at hr
+      simp only [mem_singleton] at hr
+      simp [Action.toLocal, h, hr]
+  | snapshot r' u =>
+      rw [h, Action.participants] at hr
+      simp only [mem_singleton] at hr
+      simp [Action.toLocal, h, hr]
 
 lemma mem_traceProj_of_relevant {s : Script} {r : RoleId} {tr : List EventId} {e : EventId}
     (hre : s.relevant r e = true) (he : e ∈ tr) :
