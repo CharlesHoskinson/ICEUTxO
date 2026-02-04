@@ -567,6 +567,19 @@ lemma local_no_conflict_before {s : Script} {r : RoleId} {tr : List EventId}
     exact LocalScript.validTraceAux_events (s.project r) ∅ (s.traceProj r tr) htrace' b hb'
   exact hloc ⟨hcf, hb, ha⟩
 
+/-- Order dependencies are preserved when lifting from local to global traces.
+
+If role `r` conforms to its projected trace and there is an ordering dependency
+`e' → e` in the global script, then `e'` must appear before `e` in the global trace.
+This bridges local validity (from `localConform`) with global trace ordering.
+
+**Proof strategy:** The proof connects local and global views in three steps:
+1. Show that the global order `s.order e' e` induces the projected order
+   `(s.project r).order e' e` (using the relevance hypotheses and `wellFormed.orderDom`)
+2. Apply `LocalScript.validTraceAux_order` to the projected trace to establish
+   `Before (s.traceProj r tr) e' e`
+3. Use `before_of_filter` to lift the `Before` relation from the projected trace
+   back to the original trace -/
 lemma local_validTrace_order_before {s : Script} {r : RoleId} {tr : List EventId}
     (hwf : s.wellFormed)
     (hlocal : Script.localConform s r (s.traceProj r tr))
@@ -575,8 +588,26 @@ lemma local_validTrace_order_before {s : Script} {r : RoleId} {tr : List EventId
     (hre' : s.relevant r e' = true) (hre : s.relevant r e = true)
     (hord : s.order e' e) (he : e ∈ tr) :
     Before tr e' e := by
-  -- TODO: Complete proof - order preserved across local/global projections
-  sorry
+  -- Extract valid trace from local conformance
+  have htrace : LocalScript.validTrace (s.project r) (s.traceProj r tr) := hlocal.2
+  -- Show e is in projected trace
+  have he_proj : e ∈ s.traceProj r tr := List.mem_filter.mpr ⟨he, hre⟩
+  -- Show projected order holds: need e', e ∈ s.projEvents r
+  have he'_events : e' ∈ s.events := (hwf.1 _ _ hord).1
+  have he_events : e ∈ s.events := (hwf.1 _ _ hord).2
+  have he'_proj_events : e' ∈ s.projEvents r :=
+    Finset.mem_filter.mpr ⟨he'_events, hre'⟩
+  have he_proj_events : e ∈ s.projEvents r :=
+    Finset.mem_filter.mpr ⟨he_events, hre⟩
+  have hord_proj : (s.project r).order e' e := ⟨hord, he'_proj_events, he_proj_events⟩
+  -- Apply validTraceAux_order with C = ∅
+  have horder_result := LocalScript.validTraceAux_order (s.project r) ∅
+    (s.traceProj r tr) htrace e' e hord_proj he_proj
+  -- Since e' ∉ ∅, we have Before in projected trace
+  rcases horder_result with h_empty | h_before
+  · simp at h_empty
+  · -- Lift to original trace using before_of_filter
+    exact before_of_filter hnd hre' hre h_before
 
 lemma Script.traceConsistent_of_local_and_cross (s : Script) (tr : List EventId)
     (hwf : s.wellFormed)
