@@ -640,58 +640,71 @@ lemma Script.traceConsistent_of_local_and_cross (s : Script) (tr : List EventId)
   · intro e _; simp
   -- Conjunct (4): e ∈ tr → f ∈ ∅ → ¬ conflict e f (vacuously true)
   · intro e _ f hf; simp at hf
-  -- Conjunct (5): Pairwise no conflicts
-  · -- Helper function to show no conflicts for any ordered pair
+  -- Conjunct (5): Pairwise no conflicts within the trace
+  · -- Key insight: for any ordered pair (a before b), we prove no conflicts via role dichotomy.
+    -- Either a and b share a role (use local conformance) or have disjoint roles (use hcross).
     suffices hpair : ∀ a b, a ∈ tr → b ∈ tr → Before tr a b →
         ¬ s.conflict a b ∧ ¬ s.conflict b a by
-      -- Prove Pairwise from hpair using induction
+      -- Derive Pairwise from hpair by induction on tr
       clear hlocal hcross  -- These are captured in hpair
       induction tr with
       | nil => exact List.Pairwise.nil
       | cons x xs ih =>
           have hnd' : xs.Nodup := (List.nodup_cons.mp hnd).2
           apply List.Pairwise.cons
-          · intro y hy
+          · -- Head x is non-conflicting with all elements y in tail xs
+            intro y hy
             have hx_mem : x ∈ x :: xs := List.mem_cons.mpr (Or.inl rfl)
             have hy_mem : y ∈ x :: xs := List.mem_cons_of_mem x hy
             exact hpair x y hx_mem hy_mem (before_head hy)
-          · apply ih hnd'
+          · -- Tail xs is pairwise by IH (lifting membership and Before)
+            apply ih hnd'
             · intro e he; exact hevents e (List.mem_cons_of_mem x he)
             · intro a b ha hb hab
               exact hpair a b (List.mem_cons_of_mem x ha) (List.mem_cons_of_mem x hb)
                 (before_cons_of_tail hab)
-    -- Now prove hpair
+    -- Prove hpair: for any pair with a before b, no conflicts in either direction
     intro a b ha hb hab
+    -- Role dichotomy: either a and b share a participant, or their participants are disjoint
     by_cases hshare : s.shareRole a b
-    · -- Shared role case
+    · -- Case: shared role - use local conformance
+      -- Extract the shared role r
       obtain ⟨r, hra, hrb⟩ := shareRole_exists hshare
       have hrel_a := relevant_of_participant hra
       have hrel_b := relevant_of_participant hrb
+      -- r is in the script's roles (by wellFormed.rolesOK)
       have hr_role : r ∈ s.roles := hwf.2.2.2.2.2.1 a (hevents a ha) hra
       have hloc := hlocal r hr_role
+      -- a before b in the projected trace (filtering preserves Before)
       have hab_proj : Before (s.traceProj r tr) a b :=
         before_filter_of_before hrel_a hrel_b hab
+      -- local_no_conflict_before gives ¬ conflict b a
       have hncba : ¬ s.conflict b a := local_no_conflict_before hloc a b hab_proj
+      -- By conflict symmetry (from wellFormed), ¬ conflict a b follows
       have hncab : ¬ s.conflict a b := fun hc => hncba (hwf.2.2.2.1 a b hc)
       exact ⟨hncab, hncba⟩
-    · -- Disjoint roles case
+    · -- Case: disjoint roles - use crossRoleConsistent directly
       have hdisj : s.disjointRoles a b := by
+        -- shareRole and disjointRoles partition all pairs (complementary definitions)
         simp only [Script.shareRole, Script.disjointRoles] at hshare ⊢
         rwa [Finset.not_nonempty_iff_eq_empty, ← Finset.disjoint_iff_inter_eq_empty] at hshare
       exact hcross.1 a b ha hb hdisj
-  -- Conjunct (6): Order dependencies
+  -- Conjunct (6): Order dependencies are satisfied (predecessors appear before successors)
   · intro e' e hord he
-    right  -- e' ∉ ∅, so prove Before
+    -- With C = ∅, the disjunction e' ∈ C ∨ Before tr e' e reduces to Before tr e' e
+    right
+    -- Role dichotomy again: shared role vs disjoint roles
     by_cases hshare : s.shareRole e' e
-    · -- Shared role case
+    · -- Case: shared role - use local_validTrace_order_before
       obtain ⟨r, hre', hre⟩ := shareRole_exists hshare
       have hrel_e' := relevant_of_participant hre'
       have hrel_e := relevant_of_participant hre
+      -- e' is in events (by wellFormed.orderDom)
       have he'_events : e' ∈ s.events := (hwf.1 e' e hord).1
       have hr_role : r ∈ s.roles := hwf.2.2.2.2.2.1 e' he'_events hre'
       have hloc := hlocal r hr_role
       exact local_validTrace_order_before hwf hloc hnd hrel_e' hrel_e hord he
-    · -- Disjoint roles case
+    · -- Case: disjoint roles - crossRoleConsistent.2 gives Before directly
       have hdisj : s.disjointRoles e' e := by
         simp only [Script.shareRole, Script.disjointRoles] at hshare ⊢
         rwa [Finset.not_nonempty_iff_eq_empty, ← Finset.disjoint_iff_inter_eq_empty] at hshare
