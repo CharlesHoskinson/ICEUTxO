@@ -713,30 +713,41 @@ lemma Script.traceConsistent_of_local_and_cross (s : Script) (tr : List EventId)
 /-- The head of a Nodup list cannot have any element "before" it.
 
 If `Before (e :: es) a e` held, then `e` would appear in the suffix `l2` after `a`,
-but `e` is also the head. This would mean `e` appears twice, contradicting `Nodup`. -/
+but `e` is also the head. This would mean `e` appears twice, contradicting `Nodup`.
+
+**Proof strategy:** By contradiction. Assume `Before (e :: es) a e`, which gives us
+witnesses `l1, l2` such that `e :: es = l1 ++ a :: l2` and `e ∈ l2`. We case split
+on whether `l1` is empty:
+- If `l1 = []`: Then `es = l2`, so `e ∈ es`, contradicting `Nodup`.
+- If `l1 = x :: l1'`: Then `es = l1' ++ a :: l2`, so `e ∈ l2 ⊆ es`, again contradicting `Nodup`. -/
 lemma before_head_false {e : EventId} {es : List EventId} {a : EventId}
     (hnd : (e :: es).Nodup) : ¬ Before (e :: es) a e := by
+  -- Assume Before holds and derive contradiction
   intro ⟨l1, l2, heq, he_in_l2⟩
-  -- e ∉ es by Nodup
+  -- Key fact from Nodup: the head e does not appear in the tail es
   have hne : e ∉ es := (List.nodup_cons.mp hnd).1
-  -- Case split on l1
+  -- Case split on the prefix l1 (before element a)
   cases l1 with
   | nil =>
-      -- l1 = []: e :: es = a :: l2, so es = l2 and e ∈ l2 = es
+      -- Case l1 = []: the equation becomes e :: es = [] ++ a :: l2 = a :: l2
       simp only [List.nil_append] at heq
-      -- heq : e :: es = a :: l2, so by injection es = l2
+      -- By list injection: e = a and es = l2
       have hes : es = l2 := List.cons.inj heq |>.2
+      -- Since e ∈ l2 and es = l2, we have e ∈ es
       rw [hes] at hne
+      -- But hne says e ∉ es - contradiction
       exact hne he_in_l2
   | cons x l1' =>
-      -- l1 = x :: l1': e :: es = x :: (l1' ++ a :: l2)
+      -- Case l1 = x :: l1': the equation becomes e :: es = x :: (l1' ++ a :: l2)
       simp only [List.cons_append] at heq
-      -- heq : e :: es = x :: (l1' ++ a :: l2), so es = l1' ++ a :: l2
+      -- By list injection: e = x and es = l1' ++ a :: l2
       have hes : es = l1' ++ a :: l2 := List.cons.inj heq |>.2
-      -- e ∈ l2 implies e ∈ es (since l2 is a suffix of es)
+      -- Since e ∈ l2 and l2 is a suffix of es, we have e ∈ es
       have he_in_es : e ∈ es := by
         rw [hes]
+        -- l2 ⊆ a :: l2 ⊆ l1' ++ a :: l2 = es
         exact List.mem_append_right l1' (List.mem_cons_of_mem a he_in_l2)
+      -- But hne says e ∉ es - contradiction
       exact hne he_in_es
 
 lemma traceConsistentAux_validTraceAux (s : Script) :
