@@ -142,6 +142,10 @@ For the proofs:
 1. `lean/StarstreamPilot.lean` — core types and phase transitions
 2. `lean/README.md` — proof inventory and what's still TODO
 
+## Credits
+
+Code documentation by Claude.
+
 ## License
 
 Apache 2.0
