@@ -69,6 +69,26 @@ This document is also a go/no-go record. If Lean gets too expensive, we should k
    - Effect handling terminates in at most `potential(initial)` steps.
    - Proof: strong induction on potential; each step decreases potential by ≥1.
 
+9) `core_swap_nonconflicting` — COMPLETE
+   - Non-conflicting transactions can be swapped in history without changing final state.
+   - Proof: uses `core_commute` for base commutativity.
+
+10) `commit_preserves_no_double_spend` — COMPLETE
+    - Commit step preserves the no-double-spend invariant.
+    - Proof: shows `(utxos \ inputs) ∪ outputs` disjoint from `consumed ∪ inputs`.
+
+11) `noncommit_preserves_no_double_spend` — COMPLETE
+    - Non-commit steps preserve no-double-spend.
+    - Proof: case analysis; non-commit steps don't modify `utxos` or `consumed`.
+
+12) `step_preserves_invariant` — COMPLETE
+    - All step types preserve the combined `ledgerInvariant`.
+    - Proof: comprehensive case split on `Step` constructors.
+
+13) `concurrent_refines_serial` — COMPLETE (MAIN REFINEMENT THEOREM)
+    - Concurrent execution refines serial execution via `absLedger`.
+    - Proof: induction on `Steps`; commit maps to `SerialStep`, others stutter.
+
 ## Effect termination
 
 Effect-chain termination is proved under the **fuel discipline**:
@@ -103,27 +123,6 @@ These proofs are thin wrappers around acyclicity; they do not derive it from val
 - Status: assumption removed for reachable states given `Init`; still needed when reasoning about
   arbitrary `l` without reachability hypotheses.
 
-## Proof obligations (sorry)
-These are skeleton theorems with proof strategies documented but incomplete proofs:
-
-1) `swap_nonconflicting_preserves` — Key swap/commutativity lemma
-   - Strategy: unfold `applyHistory` as `foldl`, factor prefix, use `txCommute`.
-
-2) `commit_preserves_no_double_spend` — Invariant preservation
-   - Strategy: show `(utxos \ inputs) ∪ outputs` disjoint from `consumed ∪ inputs`.
-
-3) `noncommit_preserves_no_double_spend` — Invariant preservation for non-commit steps
-   - Strategy: non-commit steps don't modify `utxos` or `consumed`.
-
-4) `pending_only_steps_stutter` — Stuttering lemma for refinement
-   - Strategy: `absLedger` erases `pending` and `locked`, so steps only changing those are stuttering.
-
-5) `concurrent_refines_serial` — MAIN REFINEMENT THEOREM
-   - Strategy: induction on `Steps`, map commit steps to `SerialStep`, other steps stutter.
-
-6) `step_preserves_invariant` — Invariant preservation across all steps
-   - Strategy: case split on `Step`; commit uses `commit_preserves_no_double_spend`, others preserve `utxos`/`consumed`.
-
 ## New additions (interleaving proof alignment)
 
 ### Structured proof commitments
@@ -148,9 +147,12 @@ These are skeleton theorems with proof strategies documented but incomplete proo
 - `acyclicExt_implies_acyclic`: bridge lemma (extended acyclicity → standard acyclicity)
 - `serializableStrong`: requires validity under serial step relation
 
-### Swap commutativity
+### Swap commutativity (all COMPLETE)
 - `txCommute`: two non-conflicting transactions commute
-- `swap_nonconflicting_preserves`: swapping adjacent non-conflicting txs preserves `applyHistory` (skeleton)
+- `core_commute`: base commutativity theorem for core state
+- `core_swap_nonconflicting`: swapping adjacent non-conflicting txs preserves `applyCoreHistory`
+- `conflict_equiv_same_core`: conflict-equivalent histories produce same core state
+- `bubble_past_suffix`: bubble element past non-conflicting suffix via swaps
 
 ### Interleaving proof circuit connection
 - `InterleavingWitness`: structured witness from the ZK circuit
@@ -168,59 +170,40 @@ These are skeleton theorems with proof strategies documented but incomplete proo
 - `reachable_noDoubleSpend`, `reachable_lockedSubsetActive`, `reachable_committedImpliesVerified`
 - `reachable_precGraphAcyclicExt`, `reachable_fullPrecGraphAcyclic`, `reachable_noDuplicatePendingProofs`
 
-### Refinement mapping
+### Refinement mapping (all COMPLETE)
 - `absLedger`: abstraction map (erases pending/locked)
 - `isStuttering`: concrete step doesn't change abstract state
-- `concurrent_refines_serial`: main refinement theorem (skeleton)
-- `circuit_witness_implies_serial_step`: circuit witness → serial step (proved)
+- `pending_only_steps_stutter`: steps not changing utxos/consumed/history are stuttering
+- `absLedger_stuttering_*`: 7 lemmas showing each non-commit step type stutters
+- `concurrent_refines_serial`: main refinement theorem (COMPLETE)
+- `circuit_witness_implies_serial_step`: circuit witness → serial step (COMPLETE)
 
-## Missing definitions / invariants that must be added
+## Potential future extensions
 
 ### A. Concurrency semantics
-- Introduce transaction phases (Reserve, Execute, Commit) to capture interleavings more precisely.
 - Model effects/handlers at the transaction level (not just global queues), with constraints like:
   - pending effects must be handled before commit,
   - handler stacks must be consistent with installed handlers.
 
 ### B. Serializability machinery
-- Fill in `swap_nonconflicting_preserves` proof.
-- Prove a topological sort lemma: acyclicity implies existence of a topo order.
-- Show topo order yields the same final state as the concurrent history.
 - Upgrade `lock_mode_serializable` and `opt_mode_serializable` to use `serializableStrong`.
 
 ### C. Proof model
 - Add invariants linking `ProofCommitment` to IVC circuit state.
-- Prove `committedImpliesVerified` is preserved by all steps.
-- Add invariant: no duplicate pending proofs for same process ID across ledger.
 
 ### D. Ledger & tx validity
 - Strengthen `validTx` to incorporate:
-  - input uniqueness,
-  - output uniqueness,
-  - input/output disjointness,
   - input ownership and signature validity,
   - output freshness relative to the ledger.
 
 ### E. Optimistic concurrency
 - Define a read snapshot and ensure `readSet` matches it.
 - Add `ReadSetValid` and `WriteSetValid` invariants.
-- Prove commit-time validation implies serializable history (or no cycles).
 
-### F. Fill in sorry proofs
-Priority order for filling in `sorry` proofs:
-1. `commit_preserves_no_double_spend` — foundational invariant
-2. `swap_nonconflicting_preserves` — key for serializability
-3. `pending_only_steps_stutter` — needed for refinement
-4. `step_preserves_invariant` — invariant preservation (depends on 1)
-5. `concurrent_refines_serial` — main refinement theorem (depends on 3, 4)
-6. `noncommit_preserves_no_double_spend` — invariant completeness
-
-## Notes on correctness vs. placeholders
-- `sorry` is used for proof obligations that have documented strategies but incomplete proofs.
-- Fully proved: `commit_requires_proof`, `circuit_witness_implies_serial_step`, `acyclicExt_implies_acyclic`, `list_eq_self_append_singleton`, `append_right_cancel`.
+## Notes on correctness
+- **No `sorry` statements remain** — all proof obligations are complete.
 - Bridge axiom: `allProofsVerified_implies_proofOk` (asserted; links structured proofs to Bool field).
-- Assumption-heavy: `lock_mode_serializable`, `opt_mode_serializable` (need `history.Nodup` or a derivation of it).
-- The next step is to fill in `sorry` proofs following the documented strategies.
+- Assumption-heavy: `lock_mode_serializable`, `opt_mode_serializable` (need `history.Nodup` or a derivation of it; for reachable states this is provided by `reachable_historyNodup`).
 
 ## System diagrams (ASCII)
 
@@ -275,11 +258,11 @@ Commit requires effects[iface] = []
 | Effects + handler stacks | `effects`, `handlerStacks` | No per-tx ownership or commit blocking |
 | IEUTxO chunk validity | `serializable` / `serializableStrong` | Strengthened definition added |
 | Proof commitments | `ProofCommitment` + `allProofsVerified` | Needs IVC circuit state link |
-| SerialRefinement | `concurrent_refines_serial` | Skeleton with proof strategy |
+| SerialRefinement | `concurrent_refines_serial` | COMPLETE |
 | CircuitVerifiable | `circuitVerifiable` | Aligned with TLA+ CircuitAlignment module |
 | NoDuplicatePendingEffects | `noDuplicatePendingProofs` | Per-tx only; need ledger-wide |
 | Precedence graph | `precEdge` / `precEdgeExt` | Serializability theorems now use `precGraphAcyclicExt` |
-| Swap commutativity | `txCommute` + `swap_nonconflicting_preserves` | Skeleton |
+| Swap commutativity | `txCommute` + `core_swap_nonconflicting` | COMPLETE |
 | Effect fuel | `Effect.fuel` | Budget for effect subtree (termination) |
 | FuelBudget | `fuelBudget` | Sum of raised (fuel+1) ≤ handled.fuel |
 | TotalFuel/Potential | `potential` | Termination measure Σ(fuel+1) |
