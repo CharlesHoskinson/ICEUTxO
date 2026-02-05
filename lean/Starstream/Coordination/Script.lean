@@ -105,6 +105,8 @@ def Action.toLocal (r : RoleId) : Action → Option LocalAction
 
 /-! ## Global Script (event structure) -/
 
+/-- Global event structure for multiparty coordination. Events represent
+commands; order captures causal dependencies; conflict captures mutual exclusion. -/
 structure Script where
   roles    : Finset RoleId
   roleKind : RoleId → RoleKind
@@ -149,6 +151,8 @@ def Script.wellFormed (s : Script) : Prop :=
 
 /-! ## Local Script -/
 
+/-- Local view of events relevant to a single role, obtained by projecting
+a global script. Contains only events that involve this role. -/
 structure LocalScript where
   events   : Finset EventId
   label    : EventId → LocalAction
@@ -184,6 +188,8 @@ def Script.downClosed (s : Script) (C : Finset EventId) : Prop :=
 def Script.isConfig (s : Script) (C : Finset EventId) : Prop :=
   C ⊆ s.events ∧ s.conflictFree C ∧ s.downClosed C
 
+/-- An event is enabled in configuration C if: it's in events, not yet executed,
+all predecessors executed, and no conflicts with executed events. -/
 def Script.enabled (s : Script) (e : EventId) (C : Finset EventId) : Prop :=
   e ∈ s.events ∧ e ∉ C ∧
   (∀ e', s.order e' e → e' ∈ C) ∧
@@ -192,6 +198,8 @@ def Script.enabled (s : Script) (e : EventId) (C : Finset EventId) : Prop :=
 def Script.step (s : Script) (C C' : Finset EventId) : Prop :=
   ∃ e, s.enabled e C ∧ C' = insert e C
 
+/-- Trace validity from configuration C: each event must be enabled when executed,
+with the configuration growing as events complete. -/
 def Script.validTraceAux (s : Script) (C : Finset EventId) : List EventId → Prop
   | []      => True
   | e :: es => s.enabled e C ∧ Script.validTraceAux s (insert e C) es
@@ -259,6 +267,8 @@ def Script.localConform (s : Script) (r : RoleId) (tr : List EventId) : Prop :=
 def Before (tr : List EventId) (a b : EventId) : Prop :=
   ∃ l1 l2, tr = l1 ++ a :: l2 ∧ b ∈ l2
 
+/-- Auxiliary consistency predicate with 6 conjuncts: no duplicates, events in script,
+not in C, no conflicts with C, pairwise non-conflicting, order respected. -/
 def Script.traceConsistentAux (s : Script) (C : Finset EventId) (tr : List EventId) : Prop :=
   tr.Nodup ∧
   (∀ e, e ∈ tr → e ∈ s.events) ∧
@@ -267,6 +277,8 @@ def Script.traceConsistentAux (s : Script) (C : Finset EventId) (tr : List Event
   tr.Pairwise (fun a b => ¬ s.conflict a b ∧ ¬ s.conflict b a) ∧
   (∀ e' e, s.order e' e → e ∈ tr → e' ∈ C ∨ Before tr e' e)
 
+/-- A trace is consistent if it satisfies the 6-conjunct consistency predicate
+starting from an empty configuration. -/
 def Script.traceConsistent (s : Script) (tr : List EventId) : Prop :=
   Script.traceConsistentAux s ∅ tr
 
@@ -418,18 +430,7 @@ lemma LocalScript.validTraceAux_order (s : LocalScript) :
             · exact Or.inl hC
           · exact Or.inr (before_cons_of_tail hbefore)
 
-/-- Filtering a list preserves the `Before` relation (lifting direction).
-
-If `a` appears before `b` in the filtered list `tr.filter p`, then `a` also appears
-before `b` in the original list `tr`. This is the "information lifting" direction:
-properties of the filtered list imply properties of the original.
-
-The converse is `before_filter_of_before`.
-
-**Proof strategy:** Induction on the list with nested case analysis:
-- Base case: trivial since both filtered and unfiltered empty lists are identical
-- Inductive case: case split on whether the head passes the filter predicate,
-  then on whether `a` equals the head -/
+/-- `Before` in filtered list implies `Before` in original. Converse: `before_filter_of_before`. -/
 lemma before_of_filter {p : EventId → Bool} {tr : List EventId} {a b : EventId}
     (hnd : tr.Nodup) (ha : p a = true) (hb : p b = true) :
     Before (tr.filter p) a b → Before tr a b := by
@@ -567,19 +568,8 @@ lemma local_no_conflict_before {s : Script} {r : RoleId} {tr : List EventId}
     exact LocalScript.validTraceAux_events (s.project r) ∅ (s.traceProj r tr) htrace' b hb'
   exact hloc ⟨hcf, hb, ha⟩
 
-/-- Order dependencies are preserved when lifting from local to global traces.
-
-If role `r` conforms to its projected trace and there is an ordering dependency
-`e' → e` in the global script, then `e'` must appear before `e` in the global trace.
-This bridges local validity (from `localConform`) with global trace ordering.
-
-**Proof strategy:** The proof connects local and global views in three steps:
-1. Show that the global order `s.order e' e` induces the projected order
-   `(s.project r).order e' e` (using the relevance hypotheses and `wellFormed.orderDom`)
-2. Apply `LocalScript.validTraceAux_order` to the projected trace to establish
-   `Before (s.traceProj r tr) e' e`
-3. Use `before_of_filter` to lift the `Before` relation from the projected trace
-   back to the original trace -/
+/-- Order `e' → e` in global script implies `e'` before `e` in global trace,
+given local conformance. Lifts via `before_of_filter`. -/
 lemma local_validTrace_order_before {s : Script} {r : RoleId} {tr : List EventId}
     (hwf : s.wellFormed)
     (hlocal : Script.localConform s r (s.traceProj r tr))
@@ -609,24 +599,8 @@ lemma local_validTrace_order_before {s : Script} {r : RoleId} {tr : List EventId
   · -- Lift to original trace using before_of_filter
     exact before_of_filter hnd hre' hre h_before
 
-/-- Main soundness theorem: local conformance + cross-role consistency implies trace consistency.
-
-This theorem combines local validity (each role's trace conforms to its projection) with
-cross-role consistency (conflicts and order dependencies respect role boundaries) to establish
-global trace consistency.
-
-**Proof strategy:**
-The 6 conjuncts of `traceConsistentAux` are proven as follows:
-1. `tr.Nodup` - given by `hnd`
-2. Events in trace are in script events - given by `hevents`
-3. Events not in C (C = ∅) - trivial
-4. No conflicts with C (C = ∅) - vacuously true
-5. Pairwise no conflicts - uses role dichotomy:
-   - Shared role: `local_no_conflict_before` + conflict symmetry
-   - Disjoint roles: `hcross` directly
-6. Order dependencies satisfied - uses role dichotomy:
-   - Shared role: `local_validTrace_order_before`
-   - Disjoint roles: `hcross` directly -/
+/-- Local conformance + cross-role consistency implies trace consistency.
+Pairwise no-conflict and order are proven by role dichotomy (shared vs disjoint). -/
 lemma Script.traceConsistent_of_local_and_cross (s : Script) (tr : List EventId)
     (hwf : s.wellFormed)
     (hnd : tr.Nodup)
@@ -710,16 +684,7 @@ lemma Script.traceConsistent_of_local_and_cross (s : Script) (tr : List EventId)
         rwa [Finset.not_nonempty_iff_eq_empty, ← Finset.disjoint_iff_inter_eq_empty] at hshare
       exact hcross.2 e' e hdisj hord he
 
-/-- The head of a Nodup list cannot have any element "before" it.
-
-If `Before (e :: es) a e` held, then `e` would appear in the suffix `l2` after `a`,
-but `e` is also the head. This would mean `e` appears twice, contradicting `Nodup`.
-
-**Proof strategy:** By contradiction. Assume `Before (e :: es) a e`, which gives us
-witnesses `l1, l2` such that `e :: es = l1 ++ a :: l2` and `e ∈ l2`. We case split
-on whether `l1` is empty:
-- If `l1 = []`: Then `es = l2`, so `e ∈ es`, contradicting `Nodup`.
-- If `l1 = x :: l1'`: Then `es = l1' ++ a :: l2`, so `e ∈ l2 ⊆ es`, again contradicting `Nodup`. -/
+/-- The head of a Nodup list cannot have any element before it. -/
 lemma before_head_false {e : EventId} {es : List EventId} {a : EventId}
     (hnd : (e :: es).Nodup) : ¬ Before (e :: es) a e := by
   -- Assume Before holds and derive contradiction
@@ -750,6 +715,8 @@ lemma before_head_false {e : EventId} {es : List EventId} {a : EventId}
       -- But hne says e ∉ es - contradiction
       exact hne he_in_es
 
+/-- Trace consistency implies trace validity. Structural recursion on trace;
+`before_head_false` rules out impossible orderings. -/
 lemma traceConsistentAux_validTraceAux (s : Script) :
     ∀ (C : Finset EventId) (tr : List EventId),
       s.traceConsistentAux C tr →
@@ -790,16 +757,20 @@ lemma traceConsistentAux_validTraceAux (s : Script) :
             | nil => simp at heq; exact Or.inl (heq.1 ▸ Finset.mem_insert_self hd C)
             | cons _ l1' => simp at heq; exact Or.inr ⟨l1', l2, heq.2, he_in_l2⟩
 
+/-- A trace satisfying the 6 consistency conditions is a valid execution. -/
 theorem traceConsistent_implies_validTrace (s : Script) (tr : List EventId)
     (h : s.traceConsistent tr) : Script.validTrace s tr :=
   traceConsistentAux_validTraceAux s ∅ tr h
 
+/-- A consistent trace on a well-formed script gives global conformance. -/
 theorem globalConform_of_consistent (s : Script) (tr : List EventId)
     (hwf : s.wellFormed) (h : s.traceConsistent tr) : s.globalConform tr := by
   exact ⟨hwf, traceConsistent_implies_validTrace s tr h⟩
 
 /-! ## Projection lemmas (core) -/
 
+/-- Filtering commutes with insert when the element fails the predicate:
+the filtered set is unchanged. -/
 lemma filter_insert_false {p : EventId → Bool} {C : Finset EventId} {e : EventId}
     (h : p e = false) :
     (insert e C).filter (fun x => p x = true) = C.filter (fun x => p x = true) := by
@@ -813,6 +784,8 @@ lemma filter_insert_false {p : EventId → Bool} {C : Finset EventId} {e : Event
   · intro ⟨hxC, hp⟩
     exact ⟨Or.inr hxC, hp⟩
 
+/-- Filtering commutes with insert when the element passes the predicate:
+the element appears in the filtered result. -/
 lemma filter_insert_true {p : EventId → Bool} {C : Finset EventId} {e : EventId}
     (h : p e = true) :
     (insert e C).filter (fun x => p x = true) = insert e (C.filter (fun x => p x = true)) := by
@@ -828,6 +801,8 @@ lemma filter_insert_true {p : EventId → Bool} {C : Finset EventId} {e : EventI
     · exact ⟨Or.inl rfl, h⟩
     · exact ⟨Or.inr hxC, hp⟩
 
+/-- Projecting a valid trace to a role preserves validity in the local script.
+Recursion with case split on relevance; uses `filter_insert_true/false`. -/
 lemma proj_validTraceAux (s : Script) (r : RoleId) :
     ∀ (C : Finset EventId) (tr : List EventId),
       Script.validTraceAux s C tr →
@@ -858,11 +833,13 @@ lemma proj_validTraceAux (s : Script) (r : RoleId) :
         rw [← filter_insert_false hrel_false]
         exact proj_validTraceAux s r (insert e C) es htail
 
+/-- A valid global trace projects to a valid local trace. -/
 theorem proj_validTrace (s : Script) (r : RoleId) (tr : List EventId)
     (h : Script.validTrace s tr) :
     LocalScript.validTrace (s.project r) (s.traceProj r tr) := by
   simpa [Script.traceProj] using (proj_validTraceAux s r ∅ tr h)
 
+/-- Well-formedness is preserved by projection to a role. -/
 theorem project_wellFormed (s : Script) (r : RoleId) (h : s.wellFormed) :
     (s.project r).wellFormed := by
   rcases h with ⟨hord, hconf, hirr, hsymm, hacyc, _hroles, _hkind⟩
