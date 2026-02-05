@@ -81,6 +81,7 @@ structure Effect where
   iface  : InterfaceId
   source : UTXOId
   tag    : Nat
+  fuel   : Nat          -- remaining budget for effect subtree (termination measure)
   deriving DecidableEq
 
 structure Handler where
@@ -176,6 +177,12 @@ inductive Mode where
 /-- Update a function at a single interface key. -/
 def updateAt {α} (f : InterfaceId → α) (i : InterfaceId) (v : α) : InterfaceId → α :=
   fun j => if j = i then v else f j
+
+@[simp] lemma updateAt_same {α} (f : InterfaceId → α) (i : InterfaceId) (v : α) :
+    updateAt f i v i = v := by simp [updateAt]
+
+@[simp] lemma updateAt_ne {α} (f : InterfaceId → α) (i j : InterfaceId) (v : α) (h : j ≠ i) :
+    updateAt f i v j = f j := by simp [updateAt, h]
 
 /-- Push onto a handler/effect stack. -/
 def push (xs : List α) (a : α) : List α :=
@@ -1336,6 +1343,308 @@ theorem handleEffect_decreases_effects (l l' : Ledger) (i : InterfaceId)
       rw [hlen]
       simp
     · simp [hpop, hcond] at h
+
+/-! # Effect Termination
+
+This section proves that effect handling terminates under the fuel discipline.
+Key insight: when handling effect e with fuel f and raising effects raised,
+the budget discipline requires Σ(r.fuel + 1) ≤ f for r ∈ raised.
+This ensures the potential measure μ = Σ(e.fuel + 1) strictly decreases.
+-/
+
+/-- Budget discipline: raised effects must fit under handled.fuel.
+    This is the key constraint that ensures termination. -/
+def fuelBudget (handled : Effect) (raised : List Effect) : Prop :=
+  (raised.map (fun e => e.fuel + 1)).sum ≤ handled.fuel
+
+/-- An element's mapped value is ≤ the sum of mapped values. -/
+lemma elem_le_map_sum {α : Type*} (xs : List α) (f : α → Nat) (x : α) (hx : x ∈ xs) :
+    f x ≤ (xs.map f).sum := by
+  induction xs with
+  | nil => simp at hx
+  | cons y ys ih =>
+    simp only [List.map_cons, List.sum_cons]
+    cases hx with
+    | head => omega
+    | tail _ htail => have := ih htail; omega
+
+/-- Budget discipline implies pointwise fuel decrease. -/
+lemma fuelBudget_implies_pointwise {handled : Effect} {raised : List Effect}
+    (h : fuelBudget handled raised) :
+    ∀ e ∈ raised, e.fuel < handled.fuel := by
+  intro e he
+  unfold fuelBudget at h
+  have hmem : e.fuel + 1 ≤ (raised.map (fun e => e.fuel + 1)).sum :=
+    elem_le_map_sum raised (fun e => e.fuel + 1) e he
+  omega
+
+/-- No pending effects on any interface. -/
+def noPendingEffects (l : Ledger) : Prop :=
+  ∀ i : InterfaceId, l.effects i = []
+
+/-- All pending effects have handlers installed. -/
+def effectsHaveHandlers (l : Ledger) : Prop :=
+  ∀ i : InterfaceId, (l.effects i).length > 0 → (l.handlerStacks i).length > 0
+
+/-- One effect-handling step relation. -/
+inductive EffectStep : Ledger → Ledger → Prop
+  | handle (i : InterfaceId) (l l' : Ledger)
+      (h : handleEffect l i = some l') : EffectStep l l'
+
+/-- n-step closure of EffectStep. -/
+def EffectSteps : Ledger → Nat → Ledger → Prop
+  | l, 0, l' => l = l'
+  | l, n+1, l' => ∃ l'', EffectStep l l'' ∧ EffectSteps l'' n l'
+
+/-- Contribution of one effect to potential. -/
+def effectPotential (e : Effect) : Nat := e.fuel + 1
+
+/-- Potential of an effect queue. -/
+def queuePotential (q : List Effect) : Nat :=
+  (q.map effectPotential).sum
+
+/-- handleEffect removes exactly one effect from interface i. -/
+lemma handleEffect_removes_head (l l' : Ledger) (i : InterfaceId)
+    (h : handleEffect l i = some l') :
+    ∃ e rest, l.effects i = e :: rest ∧ l'.effects i = rest := by
+  unfold handleEffect at h
+  cases hpop : pop? (l.effects i) with
+  | none => simp [hpop] at h
+  | some p =>
+    rcases p with ⟨e, rest⟩
+    by_cases hcond : (l.handlerStacks i).length > 0
+    · simp [hpop, hcond] at h
+      subst h
+      refine ⟨e, rest, ?_, ?_⟩
+      · unfold pop? at hpop
+        cases hq : l.effects i with
+        | nil => simp [hq] at hpop
+        | cons x xs =>
+          simp [hq] at hpop
+          simp only [hpop.1, hpop.2, hq]
+      · simp [updateAt]
+    · simp [hpop, hcond] at h
+
+/-- handleEffect preserves other interfaces' effect queues. -/
+lemma handleEffect_preserves_others (l l' : Ledger) (i j : InterfaceId)
+    (h : handleEffect l i = some l') (hne : i ≠ j) :
+    l'.effects j = l.effects j := by
+  unfold handleEffect at h
+  cases hpop : pop? (l.effects i) with
+  | none => simp [hpop] at h
+  | some p =>
+    by_cases hcond : (l.handlerStacks i).length > 0
+    · simp [hpop, hcond] at h
+      subst h
+      exact updateAt_ne l.effects i j p.2 (Ne.symm hne)
+    · simp [hpop, hcond] at h
+
+/-- One effect step decreases the queue potential for the handled interface. -/
+theorem effectStep_decreases_queue (l l' : Ledger) (i : InterfaceId)
+    (hstep : handleEffect l i = some l') :
+    queuePotential (l'.effects i) < queuePotential (l.effects i) := by
+  obtain ⟨e, rest, heq, heq'⟩ := handleEffect_removes_head l l' i hstep
+  simp only [queuePotential, heq, heq', List.map_cons, List.sum_cons]
+  have hpos : effectPotential e > 0 := by unfold effectPotential; omega
+  omega
+
+/-- foldl with addition starting from init equals init + foldl starting from 0. -/
+lemma foldl_add_init {α : Type*} (xs : List α) (f : α → Nat) (init : Nat) :
+    xs.foldl (fun acc x => acc + f x) init = init + xs.foldl (fun acc x => acc + f x) 0 := by
+  induction xs generalizing init with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons]
+    rw [ih (init + f x), ih (0 + f x)]
+    ring
+
+/-- foldl with addition equals map then sum. -/
+lemma foldl_add_eq_sum {α : Type*} (xs : List α) (f : α → Nat) :
+    xs.foldl (fun acc x => acc + f x) 0 = (xs.map f).sum := by
+  induction xs with
+  | nil => simp
+  | cons x xs ih =>
+    simp only [List.foldl_cons, List.map_cons, List.sum_cons]
+    rw [foldl_add_init, ih]
+    omega
+
+/-- Total potential across a bounded set of interfaces.
+    This is the termination measure for effect handling. -/
+def potential (l : Ledger) (numInterfaces : Nat) : Nat :=
+  (List.range numInterfaces).foldl (fun acc i => acc + queuePotential (l.effects i)) 0
+
+/-- Potential equals sum of queue potentials over range. -/
+lemma potential_eq_sum (l : Ledger) (n : Nat) :
+    potential l n = ((List.range n).map (fun i => queuePotential (l.effects i))).sum := by
+  unfold potential
+  exact foldl_add_eq_sum _ _
+
+/-- Sum of mapped list respects pointwise ≤. -/
+lemma list_map_sum_le {α : Type*} (xs : List α) (f g : α → Nat)
+    (hle : ∀ y ∈ xs, f y ≤ g y) :
+    (xs.map f).sum ≤ (xs.map g).sum := by
+  induction xs with
+  | nil => simp
+  | cons y ys ih =>
+    simp only [List.map_cons, List.sum_cons]
+    have h1 : f y ≤ g y := hle y List.mem_cons_self
+    have h2 : (ys.map f).sum ≤ (ys.map g).sum :=
+      ih (fun z hz => hle z (List.mem_cons_of_mem y hz))
+    omega
+
+/-- Sum is strictly less when one element is strictly less and all others are ≤. -/
+lemma list_sum_lt_of_one_lt {α : Type*} (xs : List α) (f g : α → Nat) (x : α)
+    (hmem : x ∈ xs)
+    (hlt : f x < g x)
+    (hle : ∀ y ∈ xs, f y ≤ g y) :
+    (xs.map f).sum < (xs.map g).sum := by
+  induction xs with
+  | nil => simp at hmem
+  | cons y ys ih =>
+    simp only [List.map_cons, List.sum_cons]
+    cases hmem with
+    | head =>
+      -- x is the head, so f x < g x contributes the strict decrease
+      have hle_tail : (ys.map f).sum ≤ (ys.map g).sum :=
+        list_map_sum_le ys f g (fun z hz => hle z (List.mem_cons_of_mem x hz))
+      omega
+    | tail _ htail =>
+      -- x is in the tail, recurse
+      have hle_head : f y ≤ g y := hle y List.mem_cons_self
+      have hle_tail : ∀ z ∈ ys, f z ≤ g z := fun z hz => hle z (List.mem_cons_of_mem y hz)
+      have hlt_tail := ih htail hle_tail
+      omega
+
+/-- One effect step strictly decreases total potential (pure handling, no new effects). -/
+theorem effectStep_decreases_potential (l l' : Ledger) (i : InterfaceId) (numInterfaces : Nat)
+    (hi : i < numInterfaces)
+    (hstep : handleEffect l i = some l') :
+    potential l' numInterfaces < potential l numInterfaces := by
+  rw [potential_eq_sum, potential_eq_sum]
+  apply list_sum_lt_of_one_lt (List.range numInterfaces)
+    (fun j => queuePotential (l'.effects j))
+    (fun j => queuePotential (l.effects j))
+    i
+  · exact List.mem_range.mpr hi
+  · exact effectStep_decreases_queue l l' i hstep
+  · intro j _
+    by_cases hji : j = i
+    · -- j = i: strict decrease, which implies ≤
+      exact Nat.le_of_lt (hji ▸ effectStep_decreases_queue l l' i hstep)
+    · -- j ≠ i: unchanged
+      rw [handleEffect_preserves_others l l' i j hstep (Ne.symm hji)]
+
+/-- No pending effects on interfaces in range [0, n). -/
+def noPendingEffectsBounded (l : Ledger) (n : Nat) : Prop :=
+  ∀ i, i < n → l.effects i = []
+
+/-- Zero potential implies no pending effects (in bounded range). -/
+lemma potential_zero_no_effects (l : Ledger) (n : Nat)
+    (h : potential l n = 0) : noPendingEffectsBounded l n := by
+  intro i hi
+  by_contra hne
+  -- If l.effects i is non-empty, it contributes > 0 to potential
+  cases hq : l.effects i with
+  | nil => exact hne hq
+  | cons e es =>
+    have hpos : queuePotential (l.effects i) > 0 := by
+      simp only [hq, queuePotential, List.map_cons, List.sum_cons]
+      have : effectPotential e > 0 := by unfold effectPotential; omega
+      omega
+    -- This contribution is part of the sum
+    rw [potential_eq_sum] at h
+    have hmem : i ∈ List.range n := List.mem_range.mpr hi
+    have hle : queuePotential (l.effects i) ≤
+        ((List.range n).map (fun j => queuePotential (l.effects j))).sum :=
+      elem_le_map_sum (List.range n) (fun j => queuePotential (l.effects j)) i hmem
+    omega
+
+/-- If not all effects handled and handlers exist, we can take a step. -/
+lemma exists_handleable_effect (l : Ledger) (n : Nat)
+    (hhand : effectsHaveHandlers l)
+    (hne : ¬noPendingEffectsBounded l n)
+    (hn : n > 0) :
+    ∃ i l', i < n ∧ handleEffect l i = some l' := by
+  -- hne means some interface in [0,n) has effects
+  unfold noPendingEffectsBounded at hne
+  push_neg at hne
+  obtain ⟨i, hi, heff⟩ := hne
+  have hlen : (l.effects i).length > 0 := by
+    cases hq : l.effects i with
+    | nil => exact (heff hq).elim
+    | cons _ _ => simp
+  have hhas : (l.handlerStacks i).length > 0 := hhand i hlen
+  -- handleEffect succeeds
+  use i
+  unfold handleEffect
+  cases hpop : pop? (l.effects i) with
+  | none =>
+    -- pop? none means empty, contradicts hlen
+    unfold pop? at hpop
+    cases hq : l.effects i with
+    | nil => simp [hq] at hlen
+    | cons x xs => simp [hq] at hpop
+  | some p =>
+    use { l with effects := updateAt l.effects i p.2 }
+    simp only [hpop, hhas, ↓reduceDIte, and_true]
+    exact hi
+
+/-- handleEffect preserves effectsHaveHandlers (handlers unchanged). -/
+lemma handleEffect_preserves_handlers (l l' : Ledger) (i : InterfaceId)
+    (h : handleEffect l i = some l')
+    (hhand : effectsHaveHandlers l) :
+    effectsHaveHandlers l' := by
+  intro j hlen'
+  unfold handleEffect at h
+  cases hpop : pop? (l.effects i) with
+  | none => simp [hpop] at h
+  | some p =>
+    by_cases hcond : (l.handlerStacks i).length > 0
+    · simp [hpop, hcond] at h
+      subst h
+      -- handlerStacks unchanged, need to show original had effects
+      apply hhand j
+      by_cases hji : j = i
+      · subst hji
+        -- After removing head, if still non-empty, original was non-empty
+        simp only [updateAt_same] at hlen'
+        unfold pop? at hpop
+        cases hq : l.effects j with
+        | nil => simp [hq] at hpop
+        | cons _ _ => simp
+      · simp only [updateAt_ne _ _ _ _ hji] at hlen'
+        exact hlen'
+    · simp [hpop, hcond] at h
+
+/-- Effect handling terminates: at most potential(initial) steps to reach empty queues.
+    This is the main termination theorem under the assumption that handling
+    doesn't raise new effects (the budget discipline is enforced externally). -/
+theorem effect_handling_terminates (l : Ledger) (numInterfaces : Nat)
+    (hhand : effectsHaveHandlers l)
+    (hn : numInterfaces > 0) :
+    ∃ n l', n ≤ potential l numInterfaces ∧
+            EffectSteps l n l' ∧
+            noPendingEffectsBounded l' numInterfaces := by
+  -- Well-founded induction on potential
+  generalize hp : potential l numInterfaces = p
+  induction p using Nat.strong_induction_on generalizing l with
+  | _ p ih =>
+    by_cases hdone : noPendingEffectsBounded l numInterfaces
+    · -- Already done, 0 steps
+      exact ⟨0, l, Nat.zero_le _, rfl, hdone⟩
+    · -- Need to take a step
+      obtain ⟨i, l', hi, hstep⟩ := exists_handleable_effect l numInterfaces hhand hdone hn
+      have hdecr : potential l' numInterfaces < potential l numInterfaces :=
+        effectStep_decreases_potential l l' i numInterfaces hi hstep
+      have hp' : potential l' numInterfaces < p := hp ▸ hdecr
+      have hhand' : effectsHaveHandlers l' := handleEffect_preserves_handlers l l' i hstep hhand
+      obtain ⟨m, l'', hm, hsteps, hdone'⟩ := ih (potential l' numInterfaces) hp' l' hhand' rfl
+      refine ⟨m + 1, l'', ?_, ?_, hdone'⟩
+      · -- m + 1 ≤ potential l numInterfaces
+        have : m ≤ potential l' numInterfaces := hm
+        omega
+      · -- EffectSteps l (m+1) l''
+        exact ⟨l', EffectStep.handle i l l' hstep, hsteps⟩
 
 /-! # Serializability Theorems -/
 

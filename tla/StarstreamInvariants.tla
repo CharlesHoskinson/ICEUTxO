@@ -279,6 +279,30 @@ INV_EFFECT_ValidHandlerStacks ==
         ValidHandlerStacks(tx.coordination)
 
 (***************************************************************************
+ * EFFECT TERMINATION INVARIANTS
+ *
+ * These invariants support the fuel-based termination proof.
+ * The budget discipline ensures Σ(fuel+1) strictly decreases on each handle.
+ ***************************************************************************)
+
+\* All effects have fuel within valid range
+INV_EFFECT_FuelBounded ==
+    \A tx \in ledger.pendingTxs :
+        \A e \in FcnRange(tx.coordination.effectStack) :
+            e.fuel \in FuelRange
+
+\* Sum of (fuel+1) over all pending effects (potential function)
+TotalFuel(effectStack) ==
+    LET effects == FcnRange(effectStack)
+    IN IF effects = {} THEN 0
+       ELSE FcnSum([e \in effects |-> e.fuel + 1])
+
+\* Total potential is bounded by MAX_EFFECT_FUEL * MAX_EFFECT_DEPTH
+INV_EFFECT_PotentialBounded ==
+    \A tx \in ledger.pendingTxs :
+        TotalFuel(tx.coordination.effectStack) <= MAX_EFFECT_FUEL * MAX_EFFECT_DEPTH
+
+(***************************************************************************
  * PROOF INVARIANTS (IVC Alignment)
  ***************************************************************************)
 
@@ -476,6 +500,14 @@ PendingTxEffectsCleared(txId) ==
 LIVE_EffectsEventuallyHandled ==
     \A txId \in TxIdRange :
         PendingTxHasEffects(txId) ~> PendingTxEffectsCleared(txId)
+
+\* Fuel-based termination: potential eventually reaches 0
+\* Under fairness, effect handling steps keep occurring while effects exist
+LIVE_EffectTermination ==
+    \A txId \in TxIdRange :
+        LET tx == GetPendingTx(ledger, txId)
+        IN PendingTxId(txId) /\ TotalFuel(tx.coordination.effectStack) > 0 ~>
+               TotalFuel(tx.coordination.effectStack) = 0
 
 LIVE_CanReturnToIdle ==
     []<>(ledger.pendingTxs = {})

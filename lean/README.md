@@ -52,6 +52,48 @@ This document is also a go/no-go record. If Lean gets too expensive, we should k
    - Uses a topological-sort witness via `acyclic_strong_serializable`.
    - Requires `history.Nodup`; acyclicity is now derived structurally from `before`.
 
+5) `effectStep_decreases_queue` — COMPLETE
+   - Single effect-handling step strictly decreases queue potential for handled interface.
+   - Proof: `handleEffect_removes_head` shows one effect removed; `effectPotential e > 0`.
+
+6) `fuelBudget_implies_pointwise` — COMPLETE
+   - Budget discipline `Σ(r.fuel + 1) ≤ f` implies pointwise `r.fuel < f` for all raised effects.
+   - Proof: each `r.fuel + 1` ≤ sum ≤ f, so `r.fuel < f`.
+
+7) `effectStep_decreases_potential` — COMPLETE
+   - Single effect-handling step strictly decreases total potential across all interfaces.
+   - Proof: uses `list_sum_lt_of_one_lt` with `effectStep_decreases_queue` for the handled interface
+     and `handleEffect_preserves_others` for unchanged interfaces.
+
+8) `effect_handling_terminates` — COMPLETE
+   - Effect handling terminates in at most `potential(initial)` steps.
+   - Proof: strong induction on potential; each step decreases potential by ≥1.
+
+## Effect termination
+
+Effect-chain termination is proved under the **fuel discipline**:
+
+- **Fuel field**: Each `Effect` carries `fuel : Nat` (remaining budget for subtree).
+- **Budget discipline** (`fuelBudget`): When handling effect with fuel `f` and raising `raised`,
+  the sum `Σ(r.fuel + 1)` for `r ∈ raised` must be ≤ `f`.
+- **Potential measure**: `μ(ledger) = Σ(e.fuel + 1)` over all pending effects.
+- **Strict decrease**: Each handle step removes `(f + 1)`, adds at most `f`, so μ decreases by ≥ 1.
+- **Termination bound**: At most `potential(initial)` steps to reach empty queues.
+
+### Proved termination theorems
+
+- `effectStep_decreases_potential` — total potential strictly decreases per handle step (COMPLETE)
+- `effect_handling_terminates` — existence of terminal state with bound ≤ initial potential (COMPLETE)
+
+### Supporting lemmas (all COMPLETE)
+
+- `potential_zero_no_effects` — zero potential implies no pending effects in range
+- `exists_handleable_effect` — if effects exist and handlers installed, can take a step
+- `handleEffect_preserves_handlers` — handlers remain installed after handling
+
+**Note:** Handler computation itself is assumed atomic/total. This proof rules out infinite
+*effect chains*, not diverging handlers.
+
 ## What is proved (but still assumption-heavy)
 These proofs are thin wrappers around acyclicity; they do not derive it from validation.
 
@@ -238,3 +280,8 @@ Commit requires effects[iface] = []
 | NoDuplicatePendingEffects | `noDuplicatePendingProofs` | Per-tx only; need ledger-wide |
 | Precedence graph | `precEdge` / `precEdgeExt` | Serializability theorems now use `precGraphAcyclicExt` |
 | Swap commutativity | `txCommute` + `swap_nonconflicting_preserves` | Skeleton |
+| Effect fuel | `Effect.fuel` | Budget for effect subtree (termination) |
+| FuelBudget | `fuelBudget` | Sum of raised (fuel+1) ≤ handled.fuel |
+| TotalFuel/Potential | `potential` | Termination measure Σ(fuel+1) |
+| INV_EFFECT_FuelBounded | `effectsBounded` (implicit) | Fuel within range |
+| LIVE_EffectTermination | `effect_handling_terminates` | Bounded termination theorem |

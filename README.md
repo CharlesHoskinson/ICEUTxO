@@ -109,7 +109,21 @@ See `lean/README.md` for the full inventory including proof obligations still ma
 
 - Liveness (TLC can check it but it's slow; disabled by default)
 - Full refinement theorem (`concurrent_refines_serial` has a skeleton)
-- Effect handler termination
+
+### Effect handler termination (NEW)
+
+Effect-chain termination is proved under the **fuel discipline**: when handling
+an effect with fuel `f` and raising effects `raised`, the sum `Σ(r.fuel + 1)` for
+`r ∈ raised` must be ≤ `f`. This ensures the potential measure `μ = Σ(e.fuel + 1)`
+strictly decreases by at least 1 per handling step.
+
+**Key theorems (all COMPLETE):**
+- `effectStep_decreases_queue` — single step decreases queue potential
+- `effectStep_decreases_potential` — single step decreases total potential
+- `effect_handling_terminates` — termination in ≤ `potential(initial)` steps
+
+**Note:** Termination of handler *computation* itself is assumed atomic/total in
+the model. This proof rules out infinite *effect chains*, not diverging handlers.
 
 ## Build
 

@@ -24,6 +24,7 @@ MC_CHAIN_ID == 1
 MC_BLOCK_HEIGHT == 0
 
 MC_MAX_EFFECT_DEPTH == MC_MAX_TX_INPUTS
+MC_MAX_EFFECT_FUEL == 5      \* Maximum fuel per effect for termination
 
 (***************************************************************************
  * CONSTANT OVERRIDES

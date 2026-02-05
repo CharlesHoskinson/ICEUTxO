@@ -23,13 +23,14 @@ EffectRecordSet ==
      handled: BOOLEAN,
      interfaceId: InterfaceIdRange,               \* Interface this effect targets
      handlerStackId: 1..MAX_HANDLER_DEPTH,        \* Position in handler stack
-     witLedgerKind: WitLedgerEffectKinds]         \* WitLedgerEffect kind from IVC
+     witLedgerKind: WitLedgerEffectKinds,         \* WitLedgerEffect kind from IVC
+     fuel: FuelRange]                             \* Remaining budget for effect subtree (termination)
 
 (***************************************************************************
  * EFFECT CONSTRUCTORS
  ***************************************************************************)
 
-\* Legacy constructor for backward compatibility (uses default interface/handler)
+\* Legacy constructor for backward compatibility (uses default interface/handler/fuel)
 NewEffect(effectKind, utxoId, continuationId, tag, payload) ==
     [kind |-> effectKind,
      sourceUtxoId |-> utxoId,
@@ -39,9 +40,10 @@ NewEffect(effectKind, utxoId, continuationId, tag, payload) ==
      handled |-> FALSE,
      interfaceId |-> 1,                  \* Default interface
      handlerStackId |-> 1,               \* Default handler position
-     witLedgerKind |-> "Resume"]         \* Default WitLedger kind
+     witLedgerKind |-> "Resume",         \* Default WitLedger kind
+     fuel |-> MAX_EFFECT_FUEL]           \* Default max fuel
 
-\* Full constructor with interface and WitLedger kind
+\* Full constructor with interface, WitLedger kind, and fuel
 NewEffectWithInterface(effectKind, utxoId, continuationId, tag, payload, iface, witKind) ==
     [kind |-> effectKind,
      sourceUtxoId |-> utxoId,
@@ -51,7 +53,21 @@ NewEffectWithInterface(effectKind, utxoId, continuationId, tag, payload, iface, 
      handled |-> FALSE,
      interfaceId |-> iface,
      handlerStackId |-> 1,
-     witLedgerKind |-> witKind]
+     witLedgerKind |-> witKind,
+     fuel |-> MAX_EFFECT_FUEL]           \* Default max fuel
+
+\* Full constructor with explicit fuel (for budget-splitting termination)
+NewEffectWithFuel(effectKind, utxoId, continuationId, tag, payload, iface, witKind, f) ==
+    [kind |-> effectKind,
+     sourceUtxoId |-> utxoId,
+     continuationId |-> continuationId,
+     tag |-> tag,
+     payload |-> payload,
+     handled |-> FALSE,
+     interfaceId |-> iface,
+     handlerStackId |-> 1,
+     witLedgerKind |-> witKind,
+     fuel |-> f]
 
 PureEffect(utxoId, continuationId, tag, payload) ==
     NewEffect("Pure", utxoId, continuationId, tag, payload)

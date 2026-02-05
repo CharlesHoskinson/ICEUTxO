@@ -29,6 +29,7 @@ MC_MAX_EFFECT_DEPTH == MC_MAX_TX_INPUTS
 MC_MAX_COORDINATORS == 2
 MC_MAX_INTERFACES == 3
 MC_MAX_HANDLER_DEPTH == 2
+MC_MAX_EFFECT_FUEL == 5      \* Maximum fuel per effect for termination
 
 (***************************************************************************
  * CONSTANT OVERRIDES
@@ -88,6 +89,10 @@ MC_EffectMatchInstalledHandlers == INV_EFFECT_EffectsMatchInstalledHandlers
 MC_EffectInstalledHandlersConsistent == INV_EFFECT_InstalledHandlersConsistent
 MC_EffectValidHandlerStacks == INV_EFFECT_ValidHandlerStacks
 
+\* Effect termination invariants
+MC_EffectFuelBounded == INV_EFFECT_FuelBounded
+MC_EffectPotentialBounded == INV_EFFECT_PotentialBounded
+
 \* Proof invariants (IVC alignment)
 MC_ProofIntegrityBound == INV_PROOF_IntegrityBound
 MC_ProofNoDoubleProof == INV_PROOF_NoDoubleProof
@@ -107,6 +112,7 @@ MC_TxTerminates == LIVE_TxEventuallyTerminates
 MC_TxCommits == LIVE_TxEventuallyCommits
 MC_IdleReachable == LIVE_CanReturnToIdle
 MC_EffectsHandled == LIVE_EffectsEventuallyHandled
+MC_EffectTermination == LIVE_EffectTermination
 
 (***************************************************************************
  * SPECIFICATION VARIANTS

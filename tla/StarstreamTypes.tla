@@ -26,7 +26,8 @@ CONSTANTS
     TOKEN_IDS,          \* Set of token IDs (e.g., {1,2,3})
     MAX_COORDINATORS,   \* Number of coordinator processes (e.g., 2)
     MAX_INTERFACES,     \* Number of effect interfaces (e.g., 3)
-    MAX_HANDLER_DEPTH   \* Maximum handler stack depth per interface (e.g., 3)
+    MAX_HANDLER_DEPTH,  \* Maximum handler stack depth per interface (e.g., 3)
+    MAX_EFFECT_FUEL     \* Maximum fuel per effect for termination (e.g., 10)
 
 (***************************************************************************
  * DERIVED CONSTANTS
@@ -52,6 +53,9 @@ ContinuationIdRange == 0..UTXO_ID_BOUND
 
 \* Effect stack depth bound (derived)
 MAX_EFFECT_DEPTH == MAX_TX_INPUTS
+
+\* Fuel range for effect termination
+FuelRange == 0..MAX_EFFECT_FUEL
 
 \* Chain context ranges
 ChainIdRange == 0..10
@@ -227,6 +231,12 @@ FoldSeq(f(_, _), acc, seq) ==
     ELSE FoldSeq(f, f(acc, seq[1]), SubSeq(seq, 2, Len(seq)))
 
 FcnRange(f) == { f[x] : x \in DOMAIN f }
+
+\* Sum values in a set of naturals (for potential function)
+SumSet(s) == FoldSet(LAMBDA a, b : a + b, 0, s)
+
+\* Sum values of a function over its domain (for fuel potential)
+FcnSum(f) == SumSet({ f[x] : x \in DOMAIN f })
 
 (***************************************************************************
  * TYPE PREDICATES
