@@ -236,8 +236,26 @@ lemma Program.shareRole_of_conflictRel
     (hexplShared : p.explicitConflictShared cfg) :
     ∀ i j, p.conflictRel i j →
       Script.shareRole (p.toScript cfg.toConfig) i j := by
-  -- TODO: Complete proof - conflict relation implies shared role
-  sorry
+  intro i j hconf
+  rcases hconf with ⟨hi, hj, _, hcase⟩
+  rcases hcase with hoverlap_utxo | hoverlap_iface | hexpl
+  · -- consumedUtxos overlap
+    rcases hoverlap_utxo with ⟨u, hu⟩
+    have hu_i := (Finset.mem_inter.mp hu).1
+    have hu_j := (Finset.mem_inter.mp hu).2
+    simp only [Script.shareRole, Program.toScript]
+    exact ⟨cfg.utxoRole u, Finset.mem_inter.mpr
+      ⟨hroles i hi (Action.accessRoles_of_consumed hu_i),
+       hroles j hj (Action.accessRoles_of_consumed hu_j)⟩⟩
+  · -- ifaceInstalls overlap
+    rcases hoverlap_iface with ⟨iface, hiface⟩
+    have hi_i := (Finset.mem_inter.mp hiface).1
+    have hi_j := (Finset.mem_inter.mp hiface).2
+    simp only [Script.shareRole, Program.toScript]
+    exact ⟨cfg.ifaceRole iface, Finset.mem_inter.mpr
+      ⟨hroles i hi (Action.accessRoles_of_ifaceInstall hi_i),
+       hroles j hj (Action.accessRoles_of_ifaceInstall hi_j)⟩⟩
+  · exact hexplShared i j hexpl
 
 def Program.crossRoleSafe (cfg : AccessConfig) (p : Program) : Prop :=
   ∀ i j, p.conflictRel i j → ¬ (p.toScript cfg.toConfig).disjointRoles i j
@@ -287,16 +305,50 @@ theorem Program.toScript_wellFormed
     (hroles : p.rolesOK cfg)
     (hkind : p.roleKindOK cfg) :
     (p.toScript cfg).wellFormed := by
-  -- TODO: Complete proof - program to script conversion preserves well-formedness
-  sorry
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro e f hord -- orderDom
+    simp only [Program.toScript, Program.events, Finset.mem_range]
+    rcases hord with ⟨he, hf, _, _⟩; exact ⟨he, hf⟩
+  · intro e f hconf -- conflictDom
+    simp only [Program.toScript, Program.events, Finset.mem_range]
+    rcases hconf with ⟨he, hf, _, _⟩; exact ⟨he, hf⟩
+  · intro e _ hconf -- conflictIrrefl
+    rcases hconf with ⟨_, _, hneq, _⟩; exact hneq rfl
+  · intro e f hconf -- conflictSymm
+    exact Program.conflictRel_symm.1 hconf
+  · intro e hcycle -- orderAcyclic
+    exact Nat.lt_irrefl e (Program.transGen_order_lt hcycle)
+  · intro e he -- rolesOK
+    simp only [Program.toScript, Program.events, Finset.mem_range] at he
+    exact hroles e he
+  · intro e he -- roleKindOK
+    simp only [Program.toScript, Program.events, Finset.mem_range] at he
+    exact hkind e he
 
 theorem Program.validTraceAux_traceFrom
     (cfg : Config) (p : Program)
     (hno : p.noConflicts) :
     ∀ start n, start + n ≤ p.length →
       Script.validTraceAux (p.toScript cfg) (Finset.range start) (Program.traceFrom start n) := by
-  -- TODO: Complete proof - sequential trace is valid
-  sorry
+  intro start n
+  induction n generalizing start with
+  | zero => intro _; simp only [Program.traceFrom, Script.validTraceAux]
+  | succ n ih =>
+      intro hbound
+      simp only [Program.traceFrom, Script.validTraceAux]
+      have hstart_bound : start < p.length :=
+        Nat.lt_of_lt_of_le (Nat.lt_add_of_pos_right (Nat.succ_pos n)) hbound
+      constructor
+      · simp only [Script.enabled, Program.toScript, Program.events]
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · simp only [Finset.mem_range]; exact hstart_bound
+        · simp only [Finset.mem_range, Nat.lt_irrefl, not_false_eq_true]
+        · intro e' hord; simp only [Finset.mem_range]; exact Program.orderRel_lt hord
+        · intro f hf hconf
+          simp only [Finset.mem_range] at hf
+          exact hno start f hstart_bound (Nat.lt_trans hf hstart_bound) hconf
+      · rw [finset_range_succ]
+        exact ih (start + 1) (by omega : start + 1 + n ≤ p.length)
 
 theorem Program.validTrace_trace
     (cfg : Config) (p : Program)
@@ -314,8 +366,58 @@ theorem Program.validTraceAux_traceFromKeep
       Script.validTraceAux (p.toScript cfg)
         ((Finset.range start).filter (fun x => keep x = true))
         (Program.traceFromKeep start n keep) := by
-  -- TODO: Complete proof - filtered trace is valid
-  sorry
+  intro start n
+  induction n generalizing start with
+  | zero => intro _; simp only [Program.traceFromKeep, Script.validTraceAux]
+  | succ n ih =>
+      intro hbound
+      have hstart_bound : start < p.length :=
+        Nat.lt_of_lt_of_le (Nat.lt_add_of_pos_right (Nat.succ_pos n)) hbound
+      simp only [Program.traceFromKeep]
+      by_cases hk : keep start = true
+      · simp only [hk, ↓reduceIte, Script.validTraceAux]
+        constructor
+        · simp only [Script.enabled, Program.toScript, Program.events]
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · simp only [Finset.mem_range]; exact hstart_bound
+          · simp only [Finset.mem_filter, Finset.mem_range, Nat.lt_irrefl, false_and, not_false_eq_true]
+          · intro e' hord
+            simp only [Finset.mem_filter, Finset.mem_range, Program.orderRel_lt hord,
+              hdown e' start hk hord, and_self]
+          · intro f hf hconflict
+            simp only [Finset.mem_filter, Finset.mem_range] at hf
+            exact hconf start f hstart_bound (Nat.lt_trans hf.1 hstart_bound) hk hf.2 hconflict
+        · have heq : insert start ((Finset.range start).filter (fun x => keep x = true)) =
+              (Finset.range (start + 1)).filter (fun x => keep x = true) := by
+            ext x; simp only [Finset.mem_insert, Finset.mem_filter, Finset.mem_range]
+            constructor
+            · intro h
+              cases h with
+              | inl hxeq => subst hxeq; exact ⟨Nat.lt_succ_self x, hk⟩
+              | inr hand => exact ⟨Nat.lt_succ_of_lt hand.1, hand.2⟩
+            · intro ⟨hlt, hkx⟩
+              by_cases hxeq : x = start
+              · exact Or.inl hxeq
+              · right; constructor
+                · cases Nat.lt_or_eq_of_le (Nat.lt_succ_iff.mp hlt) with
+                  | inl hlt' => exact hlt'
+                  | inr heq => exact absurd heq hxeq
+                · exact hkx
+          rw [heq]; exact ih (start + 1) (by omega)
+      · simp only [hk, Bool.false_eq_true, ↓reduceIte]
+        have heq : (Finset.range start).filter (fun x => keep x = true) =
+            (Finset.range (start + 1)).filter (fun x => keep x = true) := by
+          ext x; simp only [Finset.mem_filter, Finset.mem_range]
+          constructor
+          · intro ⟨hlt, hkx⟩; exact ⟨Nat.lt_succ_of_lt hlt, hkx⟩
+          · intro ⟨hlt, hkx⟩
+            have hne : x ≠ start := fun hxeq => hk (hxeq ▸ hkx)
+            constructor
+            · cases Nat.lt_or_eq_of_le (Nat.lt_succ_iff.mp hlt) with
+              | inl hlt' => exact hlt'
+              | inr heq => exact absurd heq hne
+            · exact hkx
+        rw [heq]; exact ih (start + 1) (by omega)
 
 theorem Program.validTrace_traceOf
     (cfg : Config) (p : Program) (keep : Nat → Bool)
@@ -331,8 +433,52 @@ lemma Program.mem_traceFromKeep_iff
     ∀ start n i,
       i ∈ Program.traceFromKeep start n keep ↔
         start ≤ i ∧ i < start + n ∧ keep i = true := by
-  -- TODO: Complete proof - characterization of traceFromKeep membership
-  sorry
+  intro start n
+  induction n generalizing start with
+  | zero =>
+      intro i
+      simp only [Program.traceFromKeep, List.not_mem_nil, false_iff, Nat.add_zero]
+      intro ⟨hle, hlt, _⟩
+      exact Nat.not_lt.mpr hle hlt
+  | succ n ih =>
+      intro i
+      simp only [Program.traceFromKeep]
+      by_cases hk : keep start = true
+      · simp only [hk, ↓reduceIte, List.mem_cons]
+        constructor
+        · intro h
+          cases h with
+          | inl heq =>
+            subst heq
+            exact ⟨Nat.le_refl i, Nat.lt_add_of_pos_right (Nat.succ_pos n), hk⟩
+          | inr hmem =>
+            have ⟨hle, hlt, hki⟩ := (ih (start + 1) i).mp hmem
+            exact ⟨Nat.le_of_succ_le hle, Nat.lt_of_lt_of_eq hlt (Nat.add_right_comm start 1 n), hki⟩
+        · intro ⟨hle, hlt, hki⟩
+          by_cases heq : i = start
+          · exact Or.inl heq
+          · right
+            rw [ih (start + 1) i]
+            have hle' : start + 1 ≤ i := Nat.lt_of_le_of_ne hle (Ne.symm heq)
+            have hlt' : i < start + 1 + n := by rw [Nat.add_right_comm]; exact hlt
+            exact ⟨hle', hlt', hki⟩
+      · simp only [hk, Bool.false_eq_true, ↓reduceIte]
+        rw [ih (start + 1) i]
+        have heq_add : start + 1 + n = start + (n + 1) := by ring
+        constructor
+        · intro ⟨hle, hlt, hki⟩
+          have hle' : start ≤ i := Nat.le_of_succ_le hle
+          have hlt' : i < start + (n + 1) := heq_add ▸ hlt
+          exact ⟨hle', hlt', hki⟩
+        · intro ⟨hle, hlt, hki⟩
+          have hne : i ≠ start := by
+            intro heq
+            rw [heq] at hki
+            simp only [Bool.true_eq_false] at hk
+            exact hk hki
+          have hle' : start + 1 ≤ i := Nat.lt_of_le_of_ne hle (Ne.symm hne)
+          have hlt' : i < start + 1 + n := heq_add ▸ hlt
+          exact ⟨hle', hlt', hki⟩
 
 lemma Program.mem_traceOf_iff
     (p : Program) (keep : Nat → Bool) (i : Nat) :
@@ -347,8 +493,31 @@ lemma Program.before_traceFromKeep_of_lt
       i ∈ Program.traceFromKeep start n keep →
       j ∈ Program.traceFromKeep start n keep →
       Before (Program.traceFromKeep start n keep) i j := by
-  -- TODO: Complete proof - ordering in traceFromKeep preserved by construction
-  sorry
+  intro start n
+  induction n generalizing start with
+  | zero => intro i j _ hi _; simp only [Program.traceFromKeep, List.not_mem_nil] at hi
+  | succ n ih =>
+      intro i j hij hi hj
+      simp only [Program.traceFromKeep] at hi hj ⊢
+      by_cases hk : keep start = true
+      · simp only [hk, ↓reduceIte] at hi hj ⊢
+        cases hi with
+        | head =>
+          have hj' : j ∈ Program.traceFromKeep (start + 1) n keep := by
+            cases hj with
+            | head => exact absurd hij (Nat.lt_irrefl _)
+            | tail _ hj'' => exact hj''
+          exact before_head hj'
+        | tail _ hi' =>
+          have hj' : j ∈ Program.traceFromKeep (start + 1) n keep := by
+            cases hj with
+            | head =>
+              have ⟨hle, _, _⟩ := (Program.mem_traceFromKeep_iff keep (start + 1) n i).mp hi'
+              exact absurd hij (Nat.not_lt.mpr (Nat.le_of_succ_le hle))
+            | tail _ hj'' => exact hj''
+          exact before_cons_of_tail (ih (start + 1) i j hij hi' hj')
+      · simp only [hk, Bool.false_eq_true, ↓reduceIte] at hi hj ⊢
+        exact ih (start + 1) i j hij hi hj
 
 lemma Program.before_traceOf_of_order
     (cfg : Config) (p : Program) (keep : Nat → Bool)

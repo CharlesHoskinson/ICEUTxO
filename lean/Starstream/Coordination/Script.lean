@@ -756,8 +756,39 @@ lemma traceConsistentAux_validTraceAux (s : Script) :
       Script.validTraceAux s C tr
   | C, [], _ => by simp [Script.validTraceAux]
   | C, (hd :: es), h => by
-      -- TODO: Complete proof - trace consistency implies valid trace
-      sorry
+      simp only [Script.validTraceAux]
+      obtain ⟨hnodup, hevents, hnotC, hconflC, hpair, horder⟩ := h
+      have hnd_tail := (List.nodup_cons.mp hnodup).2
+      have hhd_notin_es := (List.nodup_cons.mp hnodup).1
+      constructor
+      · unfold Script.enabled
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · exact hevents hd (List.mem_cons.mpr (Or.inl rfl))
+        · exact hnotC hd (List.mem_cons.mpr (Or.inl rfl))
+        · intro e' hord
+          rcases horder e' hd hord (List.mem_cons.mpr (Or.inl rfl)) with he'C | hbefore
+          · exact he'C
+          · exfalso; exact before_head_false hnodup hbefore
+        · exact hconflC hd (List.mem_cons.mpr (Or.inl rfl))
+      · apply traceConsistentAux_validTraceAux
+        refine ⟨hnd_tail, ?_, ?_, ?_, ?_, ?_⟩
+        · exact fun e he => hevents e (List.mem_cons_of_mem hd he)
+        · intro e he
+          simp only [Finset.mem_insert, not_or]
+          exact ⟨fun heq => hhd_notin_es (heq ▸ he), hnotC e (List.mem_cons_of_mem hd he)⟩
+        · intro e he f hf
+          simp only [Finset.mem_insert] at hf
+          rcases hf with rfl | hfC
+          · exact (List.rel_of_pairwise_cons hpair he).2
+          · exact hconflC e (List.mem_cons_of_mem hd he) f hfC
+        · exact List.Pairwise.of_cons hpair
+        · intro e' e hord he
+          rcases horder e' e hord (List.mem_cons_of_mem hd he) with he'C | hbefore
+          · exact Or.inl (Finset.mem_insert_of_mem he'C)
+          · rcases hbefore with ⟨l1, l2, heq, he_in_l2⟩
+            cases l1 with
+            | nil => simp at heq; exact Or.inl (heq.1 ▸ Finset.mem_insert_self hd C)
+            | cons _ l1' => simp at heq; exact Or.inr ⟨l1', l2, heq.2, he_in_l2⟩
 
 theorem traceConsistent_implies_validTrace (s : Script) (tr : List EventId)
     (h : s.traceConsistent tr) : Script.validTrace s tr :=
@@ -782,6 +813,21 @@ lemma filter_insert_false {p : EventId → Bool} {C : Finset EventId} {e : Event
   · intro ⟨hxC, hp⟩
     exact ⟨Or.inr hxC, hp⟩
 
+lemma filter_insert_true {p : EventId → Bool} {C : Finset EventId} {e : EventId}
+    (h : p e = true) :
+    (insert e C).filter (fun x => p x = true) = insert e (C.filter (fun x => p x = true)) := by
+  ext x
+  simp only [Finset.mem_filter, Finset.mem_insert]
+  constructor
+  · intro ⟨hx, hp⟩
+    rcases hx with rfl | hxC
+    · exact Or.inl rfl
+    · exact Or.inr ⟨hxC, hp⟩
+  · intro hx
+    rcases hx with rfl | ⟨hxC, hp⟩
+    · exact ⟨Or.inl rfl, h⟩
+    · exact ⟨Or.inr hxC, hp⟩
+
 lemma proj_validTraceAux (s : Script) (r : RoleId) :
     ∀ (C : Finset EventId) (tr : List EventId),
       Script.validTraceAux s C tr →
@@ -789,8 +835,28 @@ lemma proj_validTraceAux (s : Script) (r : RoleId) :
         (tr.filter (fun e => s.relevant r e = true))
   | C, [], _ => by simp [LocalScript.validTraceAux]
   | C, (e :: es), h => by
-      -- TODO: Complete proof - projection preserves valid trace structure
-      sorry
+      rcases h with ⟨hen, htail⟩
+      simp only [List.filter_cons]
+      by_cases hrel : s.relevant r e = true
+      · simp only [hrel, ↓reduceIte, LocalScript.validTraceAux]
+        constructor
+        · simp only [LocalScript.enabled, Script.project, Script.projEvents]
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · simp only [Finset.mem_filter]; exact ⟨hen.1, hrel⟩
+          · simp only [Finset.mem_filter, not_and]; exact fun he_in_C => absurd he_in_C hen.2.1
+          · intro e' ⟨hord, he', _⟩
+            simp only [Finset.mem_filter] at he' ⊢
+            exact ⟨hen.2.2.1 e' hord, he'.2⟩
+          · intro f hf hconf
+            simp only [Finset.mem_filter] at hf
+            exact hen.2.2.2 f hf.1 hconf.1
+        · rw [← filter_insert_true hrel]
+          exact proj_validTraceAux s r (insert e C) es htail
+      · have hrel_false : s.relevant r e = false := by
+          cases h' : s.relevant r e <;> [rfl; exact absurd h' (by simp [hrel])]
+        simp only [hrel_false, Bool.false_eq_true, ↓reduceIte]
+        rw [← filter_insert_false hrel_false]
+        exact proj_validTraceAux s r (insert e C) es htail
 
 theorem proj_validTrace (s : Script) (r : RoleId) (tr : List EventId)
     (h : Script.validTrace s tr) :
