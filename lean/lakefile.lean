@@ -18,5 +18,7 @@ lean_lib Starstream where
     `Starstream.Oracle.Proofs.PhaseC,
     `Starstream.Coordination.Script,
     `Starstream.Coordination.PTB,
-    `Starstream.Coordination.SBAC
+    `Starstream.Coordination.SBAC,
+    `Starstream.ConservativeExtension,
+    `Starstream.OptimisticMode
   ]
