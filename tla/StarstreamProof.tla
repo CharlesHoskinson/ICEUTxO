@@ -81,7 +81,7 @@ WitnessProof(processId, hash, data) ==
 IsProofCommitment(proof) ==
     /\ proof.proofKind \in ProofKinds
     /\ proof.ivcProcessId \in ProcessIdRange
-    /\ proof.commitmentHash \in FrameHashRange
+    /\ IsFrameHash(proof.commitmentHash)
     /\ proof.verificationKey \in 1..10
     /\ proof.proofData \in DatumValues
     /\ proof.verified \in BOOLEAN

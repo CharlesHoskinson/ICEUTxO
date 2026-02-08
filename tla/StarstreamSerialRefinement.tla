@@ -17,9 +17,9 @@
  *   3. Stuttering Map — identifies which concurrent steps are visible
  *   4. Refinement Theorem — the main claim
  *   5. Auxiliary Lemmas — supporting the refinement proof
- ***************************************************************************/
+ ***************************************************************************)
 
-EXTENDS StarstreamSpec, StarstreamSerial, StarstreamUTXO, StarstreamTypes,
+EXTENDS StarstreamSpec, StarstreamUTXO, StarstreamTypes,
         StarstreamCircuitAlignment
 
 (***************************************************************************
@@ -43,13 +43,26 @@ AbsUTXO(u) ==
         !.state = NormalizeState(u.state),
         !.lockedBy = NO_TX]
 
-AbsUtxoSet(ledger) ==
-    {AbsUTXO(u) : u \in ledger.utxoSet}
+AbsUtxoSet(ledgerState) ==
+    {AbsUTXO(u) : u \in ledgerState.utxoSet}
 
-\* The abstract state variables are defined by projection from concrete state
-aUtxoSet == AbsUtxoSet(ledger)
-aConsumedSet == ledger.consumedSet
-aTxHistory == ledger.txHistory
+\* Abstract projections from concrete state
+absUtxoSet == AbsUtxoSet(ledger)
+absConsumedSet == ledger.consumedSet
+absTxHistory == ledger.txHistory
+
+\* Instantiate the serial spec with the abstraction map.
+\* Variables are substituted with abstraction functions; constants
+\* are forwarded from StarstreamSpec (available via EXTENDS).
+SerialSpecRef == INSTANCE StarstreamSerial WITH
+    aUtxoSet       <- AbsUtxoSet(ledger),
+    aConsumedSet   <- ledger.consumedSet,
+    aTxHistory     <- ledger.txHistory,
+    InitialUTXOs   <- InitialUTXOs,
+    SampleContracts <- SampleContracts,
+    SampleOwners   <- SampleOwners,
+    SampleDatums   <- SampleDatums,
+    SampleTokenBags <- SampleTokenBags
 
 (***************************************************************************
  * 2. TRACE ABSTRACTION — Interleaved Trace to Serial Ordering
@@ -119,9 +132,9 @@ TxTraceSerializable(tx) ==
 
 \* Predicate: this action is a stuttering step (no abstract state change)
 IsStutteringAction ==
-    /\ aUtxoSet' = aUtxoSet
-    /\ aConsumedSet' = aConsumedSet
-    /\ aTxHistory' = aTxHistory
+    /\ AbsUtxoSet(ledger') = AbsUtxoSet(ledger)
+    /\ ledger'.consumedSet = ledger.consumedSet
+    /\ ledger'.txHistory = ledger.txHistory
 
 \* Predicate: a commit action is visible at the abstract level
 IsVisibleCommit(txId) ==
@@ -165,7 +178,13 @@ IsVisibleCommit(txId) ==
  ***************************************************************************)
 
 THEOREM SerialRefinement ==
-    Spec => SerialSpec
+    Spec => SerialSpecRef!SerialSpec
+\* Mechanized as concurrent_refines_serial in StarstreamPilot.lean.
+\* The proof proceeds by showing Init => SerialInit under the abstraction
+\* map, then case-splitting Next into stuttering steps (which leave the
+\* abstract variables unchanged) and visible steps (CommitTx, AbortTx,
+\* CreateUTXO, YieldUTXO) that correspond to serial actions.
+PROOF OMITTED
 
 (***************************************************************************
  * 5. AUXILIARY LEMMAS
@@ -175,16 +194,26 @@ THEOREM SerialRefinement ==
 
 \* Lemma: The abstraction map preserves the type invariant
 THEOREM AbsTypeOK ==
-    TypeOK => SerialTypeOK
+    TypeOK => SerialSpecRef!SerialTypeOK
+\* Mechanized as embed_ledgerInvariant in ConservativeExtension.lean.
+\* AbsUTXO preserves record structure: NormalizeState maps each state
+\* to a valid UTXOState, and clearing lockedBy yields a valid record.
+PROOF OMITTED
 
 \* Lemma: Stuttering steps preserve abstract state
 \* For any action that only modifies pendingTxs, lockedSet, or proof state,
 \* the abstract variables (aUtxoSet, aConsumedSet, aTxHistory) are unchanged.
 THEOREM StutteringPreservation ==
-    /\ ledger.utxoSet' = ledger.utxoSet
-    /\ ledger.consumedSet' = ledger.consumedSet
-    /\ ledger.txHistory' = ledger.txHistory
-    => UNCHANGED <<aUtxoSet, aConsumedSet, aTxHistory>>
+    /\ ledger'.utxoSet = ledger.utxoSet
+    /\ ledger'.consumedSet = ledger.consumedSet
+    /\ ledger'.txHistory = ledger.txHistory
+    => /\ AbsUtxoSet(ledger') = AbsUtxoSet(ledger)
+       /\ ledger'.consumedSet = ledger.consumedSet
+       /\ ledger'.txHistory = ledger.txHistory
+\* Follows from the definition of AbsUtxoSet: if utxoSet is unchanged
+\* then AbsUtxoSet is unchanged, since it applies a pointwise map.
+\* Corresponding stuttering lemmas in StarstreamPilot.lean.
+PROOF OMITTED
 
 \* Lemma: CommitTx refines SerialCommit
 \* When a transaction commits in the concurrent spec, it corresponds to
@@ -193,7 +222,11 @@ THEOREM CommitRefinesSerial ==
     \A txId \in TxIdRange :
         /\ CommitTx(txId)
         /\ TxTraceSerializable(GetPendingTx(ledger, txId))
-        => \E tx \in TransactionRecordSet : SerialCommit(tx)
+        => \E tx \in TransactionRecordSet : SerialSpecRef!SerialCommit(tx)
+\* Mechanized as the commit case of concurrent_refines_serial in
+\* StarstreamPilot.lean. The witness tx is the pending transaction
+\* record; its inputs are consumed and outputs are added atomically.
+PROOF OMITTED
 
 \* Lemma: Circuit verification is necessary for commit
 \* A transaction can only commit if the interleaving proof circuit
@@ -201,6 +234,9 @@ THEOREM CommitRefinesSerial ==
 THEOREM CircuitRequiredForCommit ==
     \A txId \in TxIdRange :
         CommitTx(txId) => AllTxProofsVerified(GetPendingTx(ledger, txId))
+\* Mechanized as commit_requires_proof in StarstreamPilot.lean.
+\* Follows directly from the AllTxProofsVerified guard in CommitTx.
+PROOF OMITTED
 
 \* Lemma: The serial ordering induced by txHistory is conflict-serializable
 \* The circuit ensures intra-tx consistency; the ledger's UTXO locking
@@ -213,6 +249,10 @@ THEOREM CommitOrderSerializable ==
         => \* No input overlap between committed transactions
            {u.id : u \in ledger.txHistory[i].inputs} \cap
            {u.id : u \in ledger.txHistory[j].inputs} = {}
+\* Mechanized as acyclic_strong_serializable in StarstreamPilot.lean.
+\* Committed transactions consume their inputs, moving them to
+\* consumedSet; a later commit cannot use already-consumed inputs.
+PROOF OMITTED
 
 (***************************************************************************
  * 6. CIRCUIT ↔ REFINEMENT CONNECTION

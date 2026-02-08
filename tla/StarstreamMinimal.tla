@@ -2,6 +2,9 @@
 (***************************************************************************
  * Minimal spec: what Starstream implements today.
  *
+ * Standalone module -- not imported by the main Starstream spec.
+ * Used for independent checking of the effect lattice properties.
+ *
  * Done: effect kinds, type primitives, UTXO storage (WASM globals)
  * Not done: tx lifecycle, handlers, coroutines, proofs
  ***************************************************************************)

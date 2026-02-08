@@ -24,54 +24,89 @@ PTBEventKinds == {
     "Produce"
 }
 
+\* Optional numeric sentinels for PTB fields.
+\* Keeping these numeric avoids TLC mixed string/int equality errors.
+NO_UTXO_ID == -1
+NO_INTERFACE_ID == -1
+NO_CONTINUATION_ID == -1
+
 PTBEvent ==
     [kind: PTBEventKinds,
-     utxoId: UTXOIdRange \cup {NULL},
-     interfaceId: InterfaceIdRange \cup {NULL},
-     effectKind: EffectKinds \cup {NULL},
-     continuationId: ContinuationIdRange \cup {NULL},
-     tag: EffectTags \cup {NULL},
-     payload: DatumValues \cup {NULL},
-     witKind: WitLedgerEffectKinds \cup {NULL},
-     handlerResult: DatumValues \cup {NULL},
+     utxoId: {NO_UTXO_ID} \cup UTXOIdRange,
+     interfaceId: {NO_INTERFACE_ID} \cup InterfaceIdRange,
+     effectKind: {NULL} \cup EffectKinds,
+     continuationId: {NO_CONTINUATION_ID} \cup ContinuationIdRange,
+     tag: {NULL} \cup EffectTags,
+     payload: {NULL} \cup DatumValues,
+     witKind: {NULL} \cup WitLedgerEffectKinds,
+     handlerResult: {NULL} \cup DatumValues,
      effectMask: SUBSET EffectTags]
 
 IsPTBEvent(e) ==
     /\ e.kind \in PTBEventKinds
-    /\ e.utxoId \in UTXOIdRange \cup {NULL}
-    /\ e.interfaceId \in InterfaceIdRange \cup {NULL}
-    /\ e.effectKind \in EffectKinds \cup {NULL}
-    /\ e.continuationId \in ContinuationIdRange \cup {NULL}
-    /\ e.tag \in EffectTags \cup {NULL}
-    /\ e.payload \in DatumValues \cup {NULL}
-    /\ e.witKind \in WitLedgerEffectKinds \cup {NULL}
-    /\ e.handlerResult \in DatumValues \cup {NULL}
+    /\ e.utxoId \in {NO_UTXO_ID} \cup UTXOIdRange
+    /\ e.interfaceId \in {NO_INTERFACE_ID} \cup InterfaceIdRange
+    /\ e.effectKind \in {NULL} \cup EffectKinds
+    /\ e.continuationId \in {NO_CONTINUATION_ID} \cup ContinuationIdRange
+    /\ e.tag \in {NULL} \cup EffectTags
+    /\ e.payload \in {NULL} \cup DatumValues
+    /\ e.witKind \in {NULL} \cup WitLedgerEffectKinds
+    /\ e.handlerResult \in {NULL} \cup DatumValues
     /\ e.effectMask \subseteq EffectTags
     /\ CASE e.kind = "Raise" ->
-            /\ e.utxoId # NULL
-            /\ e.interfaceId # NULL
+            /\ e.utxoId # NO_UTXO_ID
+            /\ e.interfaceId # NO_INTERFACE_ID
             /\ e.effectKind # NULL
-            /\ e.continuationId # NULL
+            /\ e.continuationId # NO_CONTINUATION_ID
             /\ e.tag # NULL
             /\ e.payload # NULL
             /\ e.witKind # NULL
        [] e.kind = "Resume" ->
-            /\ e.interfaceId # NULL
+            /\ e.interfaceId # NO_INTERFACE_ID
             /\ e.handlerResult # NULL
        [] e.kind = "Install" ->
-            /\ e.interfaceId # NULL
+            /\ e.interfaceId # NO_INTERFACE_ID
        [] e.kind = "Uninstall" ->
-            /\ e.interfaceId # NULL
+            /\ e.interfaceId # NO_INTERFACE_ID
        [] e.kind \in {"Read", "Snapshot", "Lock", "Consume", "Produce"} ->
-            /\ e.utxoId # NULL
+            /\ e.utxoId # NO_UTXO_ID
        [] OTHER -> FALSE
 
 (***************************************************************************
  * TRACE SET (bounded for TLC)
+ * Keep this intentionally tiny for model checking tractability.
  ***************************************************************************)
 
+SampleRaiseEvent ==
+    [kind |-> "Raise",
+     utxoId |-> 1,
+     interfaceId |-> 1,
+     effectKind |-> "Pure",
+     continuationId |-> 0,
+     tag |-> "E1",
+     payload |-> "Empty",
+     witKind |-> "Resume",
+     handlerResult |-> NULL,
+     effectMask |-> {}]
+
+SampleResumeEvent ==
+    [kind |-> "Resume",
+     utxoId |-> NO_UTXO_ID,
+     interfaceId |-> 1,
+     effectKind |-> NULL,
+     continuationId |-> NO_CONTINUATION_ID,
+     tag |-> NULL,
+     payload |-> NULL,
+     witKind |-> NULL,
+     handlerResult |-> "V0",
+     effectMask |-> {}]
+
+SamplePTBEvents == {SampleRaiseEvent, SampleResumeEvent}
+
 PTBTrace ==
-    {t \in Seq(PTBEvent) : Len(t) <= MAX_TX_INPUTS}
+    {<<>>}
+    \cup {<<e>> : e \in SamplePTBEvents}
+    \cup {<<e1, e2>> : e1 \in SamplePTBEvents, e2 \in SamplePTBEvents}
 
 IsPTBTrace(t) ==
     /\ t \in PTBTrace

@@ -113,8 +113,11 @@ OutputValidatorAccepts(out, tx) ==
 TxInputsValidate(ledger, tx) ==
     \A u \in tx.inputs :
         /\ UTXOExistsInLedger(ledger, u.id)
-        /\ GetUTXO(ledger, u.id) = u
-        /\ OutputValidatorAccepts(u, tx)
+        /\ LET live == GetUTXO(ledger, u.id)
+           IN /\ live.owner = u.owner
+              /\ live.contractId = u.contractId
+              /\ live.tokens = u.tokens
+              /\ OutputValidatorAccepts(live, tx)
 
 IEUTxOTxValid(ledger, tx) ==
     /\ IsTransactionRecord(tx)
@@ -261,31 +264,43 @@ CommitTxInLedger(ledger, txId) ==
     LET tx == GetPendingTx(ledger, txId)
         committedTx == CommitTransaction(tx)
         inputIds == {u.id : u \in tx.inputs}
+        txProofPids == {p.ivcProcessId : p \in tx.proofCommitments}
+        remainingProofs == {p \in ledger.proofStore : p.ivcProcessId \notin txProofPids}
         newUtxoSet == {u \in ledger.utxoSet : u.id \notin inputIds} \cup tx.outputs
     IN [ledger EXCEPT
         !.utxoSet = newUtxoSet,
         !.consumedSet = @ \cup inputIds,
         !.lockedSet = @ \ inputIds,
         !.pendingTxs = @ \ {tx},
-        !.txHistory = Append(@, committedTx)]
+        !.txHistory = Append(@, committedTx),
+        !.proofStore = remainingProofs,
+        !.activeProofs = {p.ivcProcessId : p \in remainingProofs}]
 
 AbortTxInLedger(ledger, txId, reason) ==
     LET tx == GetPendingTx(ledger, txId)
         failedTx == AbortTransaction(tx, reason)
         inputIds == {u.id : u \in tx.inputs}
+        txProofPids == {p.ivcProcessId : p \in tx.proofCommitments}
+        remainingProofs == {p \in ledger.proofStore : p.ivcProcessId \notin txProofPids}
         restoredSet == ReleaseUTXOsInSet(ledger.utxoSet, tx.inputs)
     IN [ledger EXCEPT
         !.utxoSet = restoredSet,
         !.lockedSet = @ \ inputIds,
         !.pendingTxs = @ \ {tx},
-        !.txHistory = Append(@, failedTx)]
+        !.txHistory = Append(@, failedTx),
+        !.proofStore = remainingProofs,
+        !.activeProofs = {p.ivcProcessId : p \in remainingProofs}]
 
 AbortOptTxInLedger(ledger, txId, reason) ==
     LET tx == GetPendingTx(ledger, txId)
         failedTx == AbortTransaction(tx, reason)
+        txProofPids == {p.ivcProcessId : p \in tx.proofCommitments}
+        remainingProofs == {p \in ledger.proofStore : p.ivcProcessId \notin txProofPids}
     IN [ledger EXCEPT
         !.pendingTxs = @ \ {tx},
-        !.txHistory = Append(@, failedTx)]
+        !.txHistory = Append(@, failedTx),
+        !.proofStore = remainingProofs,
+        !.activeProofs = {p.ivcProcessId : p \in remainingProofs}]
 
 (***************************************************************************
  * LEDGER PROOF OPERATIONS

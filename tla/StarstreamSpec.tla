@@ -242,7 +242,7 @@ ProcessPTBEvent(txId) ==
           /\ HasNextPTB(coord)
           /\ LET evt == NextPTBEvent(coord)
              IN CASE evt.kind = "Raise" -> PTBRaise(txId, tx, coord, evt)
-                [] evt.kind = "Resume" -> HandleTxEffect(txId, evt.handlerResult)
+                 [] evt.kind = "Resume" -> PTBResume(txId, tx, coord, evt)
                 [] evt.kind = "Install" -> PTBInstall(txId, tx, coord, evt)
                 [] evt.kind = "Uninstall" -> PTBUninstall(txId, tx, coord, evt)
                 [] evt.kind = "Read" -> PTBRead(txId, tx, coord, evt)
@@ -457,16 +457,22 @@ BeginTxProofGeneration(txId, processId, hash) ==
 
 \* Verify a proof for a transaction
 VerifyTxProof(txId, processId) ==
-    /\ \E tx \in ledger.pendingTxs : tx.id = txId
+    /\ \E tx \in ledger.pendingTxs : tx.id = txId /\ tx.phase = "Executing"
     /\ HasActiveProofFor(ledger, processId)
     /\ LET tx == GetPendingTx(ledger, txId)
-           oldProof == CHOOSE p \in tx.proofCommitments : p.ivcProcessId = processId
-           ledgerProof == GetProofForProcess(ledger, processId)
-       IN /\ IsPendingProof(oldProof)
-          /\ LET newTx == MarkTxProofVerified(tx, oldProof)
-                 newLedgerProof == MarkProofVerified(ledgerProof)
-                 newLedger == UpdateProofInLedger(ledger, ledgerProof, newLedgerProof)
-             IN ledger' = UpdatePendingTx(newLedger, txId, newTx)
+           txProofs == {p \in tx.proofCommitments : p.ivcProcessId = processId}
+           ledgerProofs == {p \in ledger.proofStore : p.ivcProcessId = processId}
+       IN /\ tx.proofPhase \in {"Generating", "Verifying"}
+          /\ txProofs # {}
+          /\ ledgerProofs # {}
+          /\ LET oldProof == CHOOSE p \in txProofs : TRUE
+                 ledgerProof == CHOOSE p \in ledgerProofs : TRUE
+             IN /\ IsPendingProof(oldProof)
+                /\ IsPendingProof(ledgerProof)
+                /\ LET newTx == MarkTxProofVerified(tx, oldProof)
+                       newLedgerProof == MarkProofVerified(ledgerProof)
+                       newLedger == UpdateProofInLedger(ledger, ledgerProof, newLedgerProof)
+                    IN ledger' = UpdatePendingTx(newLedger, txId, newTx)
 
 (***************************************************************************
  * NEXT STATE RELATION

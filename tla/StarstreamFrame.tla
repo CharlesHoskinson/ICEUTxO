@@ -20,6 +20,13 @@ ComputeFrameHash(pc, locals, methodId) == <<pc, locals, methodId>>
 
 FrameHashRange == {<<pc, locals, methodId>> : pc \in PCRange, locals \in LocalsType, methodId \in MethodIdRange}
 
+\* Structural check to avoid enumerating FrameHashRange in TLC.
+IsFrameHash(h) ==
+    /\ Len(h) = 3
+    /\ h[1] \in PCRange
+    /\ h[2] \in LocalsType
+    /\ h[3] \in MethodIdRange
+
 FrameSet ==
     [pc: PCRange,
      locals: LocalsType,

@@ -1,3 +1,20 @@
+@inproceedings{Necula1997,
+  author    = {George C. Necula},
+  title     = {Proof-Carrying Code},
+  booktitle = {Proceedings of the 24th ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages (POPL)},
+  year      = {1997},
+  pages     = {106--119},
+  publisher = {ACM},
+}
+
+@inproceedings{DasPfenning2022,
+  author    = {Ankush Das and Frank Pfenning},
+  title     = {Session Types with Arithmetic Refinements},
+  booktitle = {Proceedings of the 31st European Symposium on Programming (ESOP)},
+  year      = {2022},
+  publisher = {Springer},
+}
+
 @inproceedings{AlBassam2018,
   author    = {Mustafa Al-Bassam and Alberto Sonnino and Shehar Bano and Dave Hrycyszyn and George Danezis},
   title     = {Chainspace: A Sharded Smart Contracts Platform},
@@ -107,13 +124,6 @@
   year      = {1978},
 }
 
-@book{GrayReuter1993,
-  author    = {Jim Gray and Andreas Reuter},
-  title     = {Transaction Processing: Concepts and Techniques},
-  publisher = {Morgan Kaufmann},
-  year      = {1993},
-}
-
 @inproceedings{Harvey2021,
   author    = {Paul Harvey and Simon Fowler and Sam Lindley and Simon J. Gay},
   title     = {Multiparty Session Types for Safe Runtime Adaptation in an Actor Language},
@@ -168,16 +178,6 @@
   title     = {Aneris: A Mechanised Logic for Modular Reasoning about Distributed Systems},
   booktitle = {ESOP},
   year      = {2020},
-}
-
-@article{KungRobinson1979,
-  author  = {H. T. Kung and John T. Robinson},
-  title   = {On Optimistic Methods for Concurrency Control},
-  journal = {ACM Transactions on Database Systems},
-  volume  = {6},
-  number  = {2},
-  pages   = {213--226},
-  year    = {1979},
 }
 
 @article{Lamport1994,
@@ -305,6 +305,7 @@
   pages     = {325--392},
   publisher = {Springer},
   year      = {1987},
+  note      = {Based on the 1986 Bad Honnef Advanced Course; LNCS 255 published 1987},
 }
 
 @inproceedings{Yoshida2014,
@@ -368,9 +369,9 @@
 
 @misc{Nervos2019,
   author = {{Nervos Network}},
-  title  = {{CKB}: A Common Knowledge Base for Crypto-Economy},
+  title  = {{Nervos CKB}: A Common Knowledge Base for Crypto-Economy},
   year   = {2019},
-  note   = {Nervos Network whitepaper},
+  note   = {Nervos Network whitepaper, \url{https://github.com/nervosnetwork/rfcs/blob/master/rfcs/0002-ckb/0002-ckb.md}},
 }
 
 @misc{Mina2020,
@@ -384,7 +385,7 @@
   author = {{Aleo}},
   title  = {Aleo: A Platform for Private, Programmable Applications},
   year   = {2021},
-  note   = {Aleo whitepaper},
+  note   = {Aleo whitepaper, \url{https://aleo.org}},
 }
 
 @inproceedings{Kothapalli2023,
@@ -396,13 +397,6 @@
   year      = {2024},
   doi       = {10.1007/978-3-031-68403-6_11},
   note      = {ePrint 2023/573},
-}
-
-@misc{PARSEC2023,
-  author = {{PARSEC}},
-  title  = {Coroutine-Based Smart Contract Virtual Machine},
-  year   = {2023},
-  note   = {PARSEC VM whitepaper},
 }
 
 @inproceedings{Moser2016,
@@ -437,17 +431,6 @@
   note   = {Cardano CIP},
 }
 
-@article{Coffman1971,
-  author  = {Edward G. Coffman and Michael J. Elphick and Arie Shoshani},
-  title   = {System Deadlocks},
-  journal = {ACM Computing Surveys},
-  volume  = {3},
-  number  = {2},
-  pages   = {67--78},
-  year    = {1971},
-  doi     = {10.1145/356586.356588},
-}
-
 @misc{Kwon2019,
   author = {Jae Kwon and Ethan Buchman},
   title  = {Cosmos: A Network of Distributed Ledgers},
@@ -479,7 +462,7 @@
   title     = {Block-{STM}: Scaling Blockchain Execution by Turning Ordering Curse to a Performance Blessing},
   booktitle = {Proceedings of the ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming (PPoPP)},
   year      = {2023},
-  doi       = {10.1145/3572848.3577501},
+  doi       = {10.1145/3572848.3577524},
 }
 
 @misc{Yakovenko2018,
@@ -489,33 +472,13 @@
   note   = {Solana Labs Whitepaper, v0.8.13},
 }
 
-@article{HerlihyWing1990,
-  author    = {Maurice P. Herlihy and Jeannette M. Wing},
-  title     = {Linearizability: A Correctness Condition for Concurrent Objects},
-  journal   = {ACM Transactions on Programming Languages and Systems},
-  volume    = {12},
-  number    = {3},
-  pages     = {463--492},
-  year      = {1990},
-  doi       = {10.1145/78969.78972},
-}
-
-@article{LynchVaandrager1995,
-  author    = {Nancy Lynch and Frits Vaandrager},
-  title     = {Forward and Backward Simulations: {I}. {U}ntimed Systems},
-  journal   = {Information and Computation},
-  volume    = {121},
-  number    = {2},
-  pages     = {214--233},
-  year      = {1995},
-  doi       = {10.1006/inco.1995.1134},
-}
-
-@misc{Hydra2023,
-  author = {{Input Output Global}},
-  title  = {Hydra: Isomorphic State Channels},
-  year   = {2023},
-  note   = {IOG technical report},
+@inproceedings{Hydra2023,
+  author    = {Manuel M. T. Chakravarty and Sandro Coretti and Matthias Fitzi and
+               Peter Ga\v{z}i and Philipp Kant and Aggelos Kiayias and Alexander Russell},
+  title     = {Hydra: Fast Isomorphic State Channels},
+  booktitle = {Financial Cryptography and Data Security (FC)},
+  year      = {2021},
+  note      = {ePrint 2020/299, \url{https://hydra.family}},
 }
 
 @inproceedings{PirleaSergey2023,
@@ -532,11 +495,21 @@
   year      = {2018},
 }
 
-@misc{Lurk2022,
-  author = {Nada Amin and John Burnham and Fran\c{c}ois Garillot and Rosario Gennaro and Chhi'med K\"{u}nzang and Daniel Lubarov and Ismael Hishon-Rezaizadeh and Cameron Wong},
-  title  = {Lurk: Lambda, the Ultimate Recursive Knowledge},
-  year   = {2022},
-  note   = {ePrint 2023/369},
+@misc{Wood2014,
+  author = {Gavin Wood},
+  title  = {Ethereum: A Secure Decentralised Generalised Transaction Ledger},
+  year   = {2014},
+  note   = {Ethereum Yellow Paper, \url{https://ethereum.github.io/yellowpaper/paper.pdf}},
+}
+
+@inproceedings{Sivaramakrishnan2021,
+  author    = {KC Sivaramakrishnan and Stephen Dolan and Leo White and
+               Sadiq Jaffer and Tom Kelly and Anmol Sahoo and
+               Sudha Parimala and Atul Dhiman and Anil Madhavapeddy},
+  title     = {Retrofitting Effect Handlers onto {OCaml}},
+  booktitle = {PLDI},
+  year      = {2021},
+  doi       = {10.1145/3453483.3454039},
 }
 
 @misc{PaperB,

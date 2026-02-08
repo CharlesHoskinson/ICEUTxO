@@ -15,9 +15,9 @@
  * The effect handler protocol defines valid sequences of operations on
  * handler stacks and effect stacks within a single transaction. The
  * protocol has three participants:
- *   1. Coroutine (UTXO program) — raises effects, receives resume values
- *   2. Coordination script — orchestrates handler installation and dispatch
- *   3. Handler — installed on an interface, handles effects, produces values
+ *   1. Coroutine (UTXO program) - raises effects, receives resume values
+ *   2. Coordination script - orchestrates handler installation and dispatch
+ *   3. Handler - installed on an interface, handles effects, produces values
  *
  * SESSION TYPE (informal):
  *   Coroutine = !Raise(tag, payload, iface) . ?Resume(value) . Coroutine
@@ -32,10 +32,10 @@
  *             | Commit
  *
  * PROTOCOL PHASES:
- *   1. Setup — Install handlers on interfaces
- *   2. Execution — Coroutines run, raise effects, effects are dispatched
- *   3. Teardown — Uninstall handlers, finalize
- *   4. Commit — No pending effects, all handlers consistent
+ *   1. Setup - Install handlers on interfaces
+ *   2. Execution - Coroutines run, raise effects, effects are dispatched
+ *   3. Teardown - Uninstall handlers, finalize
+ *   4. Commit - No pending effects, all handlers consistent
  *
  * FORMALIZATION APPROACH:
  *   Each session-type constraint is encoded as a TLA+ predicate that
@@ -231,7 +231,7 @@ INV_PROTOCOL_WellFormed(ledger) ==
  * session type. This section formalizes that view.
  *
  * UTXO Lifecycle Protocol:
- *   Created . (Yield . (HandleEffect . Resume)*) . Consume
+ *   Created . (Yield . (HandleEffect . Resume) star) . Consume
  *
  * Breakdown:
  *   - Created: initial state, UTXO has been constructed
@@ -241,9 +241,9 @@ INV_PROTOCOL_WellFormed(ledger) ==
  *   - Consume: UTXO is consumed (spent), terminal state
  *
  * State machine:
- *   Created → Suspended_at_Yield → Reserved → Executing → ...
- *   Executing → Suspended_at_Effect → Executing → ...
- *   Executing → Consumed (terminal)
+ *   Created -> Suspended_at_Yield -> Reserved -> Executing -> ...
+ *   Executing -> Suspended_at_Effect -> Executing -> ...
+ *   Executing -> Consumed (terminal)
  ***************************************************************************)
 
 \* Valid UTXO state transitions (session type transitions)

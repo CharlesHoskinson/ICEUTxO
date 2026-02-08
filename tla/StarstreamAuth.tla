@@ -44,8 +44,8 @@ CoordCallIndexRange == 0..10
 
 \* PTB event commitments (authoritative coordination digest)
 PTBEventCommitmentType ==
-    PTBEventKinds \X (UTXOIdRange \cup {NULL}) \X (InterfaceIdRange \cup {NULL}) \X
-    (EffectKinds \cup {NULL}) \X (ContinuationIdRange \cup {NULL}) \X
+    PTBEventKinds \X (UTXOIdRange \cup {NO_UTXO_ID}) \X (InterfaceIdRange \cup {NO_INTERFACE_ID}) \X
+    (EffectKinds \cup {NULL}) \X (ContinuationIdRange \cup {NO_CONTINUATION_ID}) \X
     (EffectTags \cup {NULL}) \X (DatumValues \cup {NULL}) \X
     (WitLedgerEffectKinds \cup {NULL}) \X (DatumValues \cup {NULL}) \X (SUBSET EffectTags)
 
@@ -130,7 +130,7 @@ IsProofCommitmentDigest(p) ==
     /\ Len(p) = 5
     /\ p[1] \in ProofKinds
     /\ p[2] \in ProcessIdRange
-    /\ p[3] \in FrameHashRange
+    /\ IsFrameHash(p[3])
     /\ p[4] \in 1..10
     /\ p[5] \in 0..UTXO_ID_BOUND
 
@@ -194,10 +194,10 @@ IsEffectCommitmentSeq(eseq) ==
 IsPTBEventCommitment(p) ==
     /\ Len(p) = 10
     /\ p[1] \in PTBEventKinds
-    /\ p[2] \in UTXOIdRange \cup {NULL}
-    /\ p[3] \in InterfaceIdRange \cup {NULL}
+    /\ p[2] \in UTXOIdRange \cup {NO_UTXO_ID}
+    /\ p[3] \in InterfaceIdRange \cup {NO_INTERFACE_ID}
     /\ p[4] \in EffectKinds \cup {NULL}
-    /\ p[5] \in ContinuationIdRange \cup {NULL}
+    /\ p[5] \in ContinuationIdRange \cup {NO_CONTINUATION_ID}
     /\ p[6] \in EffectTags \cup {NULL}
     /\ p[7] \in DatumValues \cup {NULL}
     /\ p[8] \in WitLedgerEffectKinds \cup {NULL}

@@ -191,8 +191,10 @@ MarkTxProofVerified(tx, proof) ==
     LET updatedProof == MarkProofVerified(proof)
         newCommitments == (tx.proofCommitments \ {proof}) \cup {updatedProof}
         allVerified == \A p \in newCommitments : IsVerifiedProof(p)
+        newCoord == IF allVerified THEN MarkSafeToLedger(tx.coordination) ELSE tx.coordination
     IN SignTx([tx EXCEPT
         !.proofCommitments = newCommitments,
+        !.coordination = newCoord,
         !.proofPhase = IF allVerified THEN "Verified" ELSE @])
 
 \* Mark a proof as failed in the transaction

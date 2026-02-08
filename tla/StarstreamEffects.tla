@@ -145,6 +145,8 @@ PendingEffects(stack) ==
 AllEffectsHandled(stack) ==
     \A e \in FcnRange(stack) : e["handled"]
 
+\* Unused by the main spec actions but retained as a utility for debugging
+\* and trace exploration. Returns the first pending effect for a given UTXO.
 FindPendingEffectForUTXO(stack, utxoId) ==
     LET pending == {i \in 1..Len(stack) :
                     /\ stack[i]["sourceUtxoId"] = utxoId
@@ -181,7 +183,10 @@ ClearHandledEffects(stack) ==
 ValidEffectStack(stack) ==
     \A e \in FcnRange(stack) : IsEffectRecord(e)
 
-OrderedEffectStack(stack) == TRUE
+OrderedEffectStack(stack) ==
+    \A i, j \in 1..Len(stack) :
+        (i < j /\ ~stack[i]["handled"] /\ ~stack[j]["handled"])
+        => stack[i]["continuationId"] <= stack[j]["continuationId"]
 
 NoDuplicatePendingEffects(stack) ==
     \A i, j \in 1..Len(stack) :

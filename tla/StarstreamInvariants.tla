@@ -357,28 +357,28 @@ INV_PROOF_ValidIVCConfig ==
  ***************************************************************************)
 
 INV_CIRCUIT_NoSelfResumeCheck ==
-    INV_CIRCUIT_NoSelfResume
+    INV_CIRCUIT_NoSelfResume(ledger)
 
 INV_CIRCUIT_ActivationConsistentCheck ==
-    INV_CIRCUIT_ActivationConsistent
+    INV_CIRCUIT_ActivationConsistent(ledger)
 
 INV_CIRCUIT_RefArenaBoundedCheck ==
-    INV_CIRCUIT_RefArenaBounded
+    INV_CIRCUIT_RefArenaBounded(ledger)
 
 INV_CIRCUIT_HandlerNodeLinkedCheck ==
-    INV_CIRCUIT_HandlerNodeLinked
+    INV_CIRCUIT_HandlerNodeLinked(ledger)
 
 INV_CIRCUIT_InitializationConsistentCheck ==
-    INV_CIRCUIT_InitializationConsistent
+    INV_CIRCUIT_InitializationConsistent(ledger)
 
 INV_CIRCUIT_EffectOpcodeSingleStepCheck ==
-    INV_CIRCUIT_EffectOpcodeSingleStep
+    INV_CIRCUIT_EffectOpcodeSingleStep(ledger)
 
 INV_CIRCUIT_DualTraceConsistencyCheck ==
-    INV_CIRCUIT_DualTraceConsistency
+    INV_CIRCUIT_DualTraceConsistency(ledger)
 
 INV_CIRCUIT_ValueCommitmentIntegrityCheck ==
-    INV_CIRCUIT_ValueCommitmentIntegrity
+    INV_CIRCUIT_ValueCommitmentIntegrity(ledger)
 
 (***************************************************************************
  * FRAME INTEGRITY INVARIANTS
@@ -448,6 +448,8 @@ INV_Safety ==
     /\ INV_EFFECT_StackDepthBounded
     /\ INV_EFFECT_InterfaceConsistent
     /\ INV_EFFECT_PerInterfaceDepth
+    /\ INV_EFFECT_EffectsMatchInstalledHandlers
+    /\ INV_EFFECT_InstalledHandlersConsistent
     /\ INV_EFFECT_ValidHandlerStacks
     /\ INV_PROOF_IntegrityBound
     /\ INV_PROOF_NoDoubleProof
@@ -455,6 +457,7 @@ INV_Safety ==
     /\ INV_PROOF_ConsistentPhase
     /\ INV_PROOF_CommittedVerified
     /\ INV_PROOF_ActiveProofsConsistent
+    /\ INV_PROOF_TxProofsInLedger
     /\ INV_PROOF_ValidIVCConfig
     /\ INV_CIRCUIT_NoSelfResumeCheck
     /\ INV_CIRCUIT_ActivationConsistentCheck
@@ -477,7 +480,9 @@ PendingTxId(txId) ==
     txId \in {t.id : t \in ledger.pendingTxs}
 
 CommittedTxId(txId) ==
-    \E tx \in ledger.txHistory : tx.id = txId /\ IsCommittedTx(tx)
+    \E i \in 1..Len(ledger.txHistory) :
+        LET tx == ledger.txHistory[i]
+        IN tx.id = txId /\ IsCommittedTx(tx)
 
 CommitEnabled(txId) ==
     ENABLED CommitTx(txId)

@@ -229,7 +229,7 @@ StepAligned(ledger, tx, coord, effect) ==
 \* The circuit enforces that a process cannot resume itself.
 \* In TLA+: when handling an effect (Resume), the source UTXO must differ
 \* from the currently active process.
-INV_CIRCUIT_NoSelfResume ==
+INV_CIRCUIT_NoSelfResume(ledger) ==
     \A tx \in ledger.pendingTxs :
         \A e \in PendingEffects(tx.coordination.effectStack) :
             e.witLedgerKind = "Resume" =>
@@ -240,7 +240,7 @@ INV_CIRCUIT_NoSelfResume ==
 \* - Active processes must have valid id_curr
 \* - Inactive processes must have id_curr = -1
 \* - Suspended processes must have a valid id_prev
-INV_CIRCUIT_ActivationConsistent ==
+INV_CIRCUIT_ActivationConsistent(ledger) ==
     \A tx \in ledger.pendingTxs :
         /\ (tx.coordination.ivcConfig.activation = "Active") =>
             tx.coordination.ivcConfig.id_curr \in ProcessIdRange
@@ -253,7 +253,7 @@ INV_CIRCUIT_ActivationConsistent ==
 \* INV_CIRCUIT_RefArenaBounded
 \* The circuit's reference arena has bounded capacity.
 \* In TLA+: the number of active UTXOs per transaction is bounded by inputs + outputs.
-INV_CIRCUIT_RefArenaBounded ==
+INV_CIRCUIT_RefArenaBounded(ledger) ==
     \A tx \in ledger.pendingTxs :
         Cardinality(tx.inputs) + Cardinality(tx.outputs) <= MAX_UTXOS
 
@@ -262,7 +262,7 @@ INV_CIRCUIT_RefArenaBounded ==
 \* - Each handler in a stack references the correct interface
 \* - Handler IDs are monotonically increasing within a stack
 \* - The top handler is the one used for effect dispatch
-INV_CIRCUIT_HandlerNodeLinked ==
+INV_CIRCUIT_HandlerNodeLinked(ledger) ==
     \A tx \in ledger.pendingTxs :
         \A iface \in InterfaceIdRange :
             LET stack == tx.coordination.handlerStacks[iface]
@@ -274,7 +274,7 @@ INV_CIRCUIT_HandlerNodeLinked ==
 \* The circuit verifies initialization state is consistent with activation:
 \* - NotStarted coordination has Inactive IVC config
 \* - Complete coordination has safe_to_ledger = TRUE (if proofs verified)
-INV_CIRCUIT_InitializationConsistent ==
+INV_CIRCUIT_InitializationConsistent(ledger) ==
     \A tx \in ledger.pendingTxs :
         /\ (tx.coordination.phase = "NotStarted") =>
             tx.coordination.ivcConfig.activation = "Inactive"
@@ -284,7 +284,7 @@ INV_CIRCUIT_InitializationConsistent ==
 \* INV_CIRCUIT_EffectOpcodeSingleStep
 \* The circuit processes exactly one opcode per IVC step.
 \* In TLA+: at most one pending effect per source UTXO at any time.
-INV_CIRCUIT_EffectOpcodeSingleStep ==
+INV_CIRCUIT_EffectOpcodeSingleStep(ledger) ==
     \A tx \in ledger.pendingTxs :
         NoDuplicatePendingEffects(tx.coordination.effectStack)
 
@@ -293,7 +293,7 @@ INV_CIRCUIT_EffectOpcodeSingleStep ==
 \* This is the core message-matching invariant of the interleaving circuit.
 \* Expressed in TLA+: when an effect is handled, the continuation ID must
 \* match the source UTXO's frame PC (its yield point).
-INV_CIRCUIT_DualTraceConsistency ==
+INV_CIRCUIT_DualTraceConsistency(ledger) ==
     \A tx \in ledger.pendingTxs :
         \A e \in PendingEffects(tx.coordination.effectStack) :
             /\ UTXOExistsInLedger(ledger, e.sourceUtxoId)
@@ -303,20 +303,20 @@ INV_CIRCUIT_DualTraceConsistency ==
 \* INV_CIRCUIT_ValueCommitmentIntegrity
 \* The circuit checks that frame hashes (value commitments) are consistent.
 \* This binds individual WASM proofs to the aggregate interleaving proof.
-INV_CIRCUIT_ValueCommitmentIntegrity ==
+INV_CIRCUIT_ValueCommitmentIntegrity(ledger) ==
     \A u \in ledger.utxoSet :
         u.frame.hash = ComputeFrameHash(u.frame.pc, u.frame.locals, u.frame.methodId)
 
 \* Combined circuit alignment invariant
-INV_CIRCUIT_All ==
-    /\ INV_CIRCUIT_NoSelfResume
-    /\ INV_CIRCUIT_ActivationConsistent
-    /\ INV_CIRCUIT_RefArenaBounded
-    /\ INV_CIRCUIT_HandlerNodeLinked
-    /\ INV_CIRCUIT_InitializationConsistent
-    /\ INV_CIRCUIT_EffectOpcodeSingleStep
-    /\ INV_CIRCUIT_DualTraceConsistency
-    /\ INV_CIRCUIT_ValueCommitmentIntegrity
+INV_CIRCUIT_All(ledger) ==
+    /\ INV_CIRCUIT_NoSelfResume(ledger)
+    /\ INV_CIRCUIT_ActivationConsistent(ledger)
+    /\ INV_CIRCUIT_RefArenaBounded(ledger)
+    /\ INV_CIRCUIT_HandlerNodeLinked(ledger)
+    /\ INV_CIRCUIT_InitializationConsistent(ledger)
+    /\ INV_CIRCUIT_EffectOpcodeSingleStep(ledger)
+    /\ INV_CIRCUIT_DualTraceConsistency(ledger)
+    /\ INV_CIRCUIT_ValueCommitmentIntegrity(ledger)
 
 (***************************************************************************
  * SECTION 6: Gap Analysis — Properties NOT in Circuit
